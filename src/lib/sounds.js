@@ -29,6 +29,10 @@ export function playAscendaSound(kind = 'reward', settings = {}) {
     if (!context) return
     if (context.state === 'suspended') context.resume()
     const now = context.currentTime + 0.015
+    if (kind === 'alarm') {
+      ;[659, 784, 659, 880, 659].forEach((frequency, index) => tone(context, frequency, now + index * 0.14, 0.22, 'square', 0.042))
+      return
+    }
     if (kind === 'rank') {
       ;[392, 523, 659, 784].forEach((frequency, index) => tone(context, frequency, now + index * 0.1, 0.32, 'triangle', 0.052))
       return

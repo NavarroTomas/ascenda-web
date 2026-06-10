@@ -12,6 +12,7 @@ import { getDailyQuote } from '../data/motivationalQuotes.js'
 import { mergeCategories } from '../data/defaultCategories.js'
 import { calculateSeasonPoints, getSeasonRank } from '../data/seasonRanks.js'
 import { playAscendaSound } from '../lib/sounds.js'
+import { showLocalSystemNotification } from '../lib/pwa.js'
 import TaskModal from './TaskModal.jsx'
 import HabitModal from './HabitModal.jsx'
 import RoutineModal from './RoutineModal.jsx'
@@ -73,8 +74,13 @@ function groupByDate(items, dateKey = 'due_date') {
 }
 
 function getHashSection() {
-  const section = window.location.hash.replace('#/', '')
+  const section = window.location.hash.replace('#/', '').split('?')[0]
   return NAV_ITEMS.some((item) => item.id === section) ? section : 'inicio'
+}
+
+function getHashParams() {
+  const query = window.location.hash.split('?')[1] || ''
+  return new URLSearchParams(query)
 }
 
 function routineIsDueToday(routine, day = new Date().getDay()) {
@@ -98,10 +104,12 @@ function makeSourceKey(id, date) {
 
 function nextReminderTrigger(reminder) {
   const next = new Date(reminder.next_trigger_at)
-  const amount = Number(reminder.recurrence_interval || 1)
-  if (reminder.recurrence_type === 'daily') next.setDate(next.getDate() + amount)
-  if (reminder.recurrence_type === 'weekly') next.setDate(next.getDate() + amount * 7)
-  if (reminder.recurrence_type === 'monthly') next.setMonth(next.getMonth() + amount)
+  const amount = Math.max(1, Number(reminder.recurrence_interval || 1))
+  do {
+    if (reminder.recurrence_type === 'daily') next.setDate(next.getDate() + amount)
+    if (reminder.recurrence_type === 'weekly') next.setDate(next.getDate() + amount * 7)
+    if (reminder.recurrence_type === 'monthly') next.setMonth(next.getMonth() + amount)
+  } while (next <= new Date())
   return next.toISOString()
 }
 
@@ -153,6 +161,7 @@ export default function Dashboard({ session }) {
   const [pendingActions, setPendingActions] = useState(() => new Set())
   const pendingActionRef = useRef(new Set())
   const shownReminderRef = useRef(new Set())
+  const openedDeliveryRef = useRef(new Set())
 
   const categories = useMemo(() => mergeCategories(customCategories), [customCategories])
   const displayName = profile?.display_name || user.email?.split('@')[0] || 'Usuario'
@@ -558,9 +567,11 @@ export default function Dashboard({ session }) {
     return true
   }
   async function deleteReminder(id) { const { error } = await supabase.from('reminders').delete().eq('id', id); if (error) return showToast(`No se pudo eliminar: ${formatError(error)}`); setReminders((current) => current.filter((item) => item.id !== id)); showToast('Recordatorio eliminado.') }
-  async function logReminder(reminder, action) { const { data } = await supabase.from('notification_history').insert({ user_id:user.id, reminder_id:reminder.id, title:reminder.title, action }).select().single(); if (data) setNotificationHistory((current) => [data, ...current]) }
-  async function dismissReminder(reminder) { await logReminder(reminder, 'dismissed'); if (reminder.recurrence_type === 'none') { const { data } = await supabase.from('reminders').update({ status:'dismissed' }).eq('id', reminder.id).select().single(); setReminders((current)=>current.map(r=>r.id===reminder.id?data:r)) } else { const { data } = await supabase.from('reminders').update({ next_trigger_at:nextReminderTrigger(reminder) }).eq('id', reminder.id).select().single(); shownReminderRef.current.delete(reminder.id); setReminders((current)=>current.map(r=>r.id===reminder.id?data:r)) } setActiveReminder(null) }
-  async function snoozeReminder(reminder, minutes) { const next = new Date(Date.now()+minutes*60000).toISOString(); await logReminder(reminder, `snoozed_${minutes}`); const { data } = await supabase.from('reminders').update({ next_trigger_at:next }).eq('id', reminder.id).select().single(); shownReminderRef.current.delete(reminder.id); setReminders((current)=>current.map(r=>r.id===reminder.id?data:r)); setActiveReminder(null) }
+  async function toggleReminderEnabled(reminder) { const enabled = reminder.enabled === false; const { data, error } = await supabase.from('reminders').update({ enabled }).eq('id', reminder.id).select().single(); if (error) return showToast(`No se pudo actualizar: ${formatError(error)}`); shownReminderRef.current.delete(reminder.id); setReminders((current) => current.map((item) => item.id === data.id ? data : item)); showToast(enabled ? 'Recordatorio activado.' : 'Recordatorio pausado.') }
+  async function updateNotificationHistoryItem(id, patch) { const { data, error } = await supabase.from('notification_history').update(patch).eq('id', id).select().maybeSingle(); if (!error && data) setNotificationHistory((current) => current.map((item) => item.id === data.id ? data : item)); return data }
+  async function logReminder(reminder, action, patch = {}) { const payload = { user_id:user.id, reminder_id:reminder.id, title:reminder.title, action, ...patch }; if (reminder._delivery_id) return updateNotificationHistoryItem(reminder._delivery_id, { action, ...patch }); const { data } = await supabase.from('notification_history').insert(payload).select().single(); if (data) setNotificationHistory((current) => [data, ...current]); return data }
+  async function dismissReminder(reminder) { const viewedAt = new Date().toISOString(); await logReminder(reminder, 'viewed', { delivery_status:'viewed', viewed_at:viewedAt }); const payload = { last_viewed_at:viewedAt }; if (!reminder._server_claimed) { if (reminder.recurrence_type === 'none') payload.status = 'dismissed'; else payload.next_trigger_at = nextReminderTrigger(reminder) } const { data, error } = await supabase.from('reminders').update(payload).eq('id', reminder.id).select().single(); if (!error && data) setReminders((current)=>current.map(r=>r.id===reminder.id?data:r)); shownReminderRef.current.delete(reminder.id); setActiveReminder(null) }
+  async function snoozeReminder(reminder, minutes) { const next = new Date(Date.now()+minutes*60000).toISOString(); const snoozedAt = new Date().toISOString(); await logReminder(reminder, 'snoozed', { delivery_status:'snoozed', snoozed_until:next }); const { data, error } = await supabase.from('reminders').update({ next_trigger_at:next, status:'active', enabled:true, last_snoozed_at:snoozedAt, last_sent_at:null }).eq('id', reminder.id).select().single(); if (!error && data) setReminders((current)=>current.map(r=>r.id===reminder.id?data:r)); shownReminderRef.current.delete(reminder.id); setActiveReminder(null) }
 
   async function saveDailyNote(payload, existingNote) { const query=existingNote?.id?supabase.from('daily_notes').update(payload).eq('id',existingNote.id):supabase.from('daily_notes').insert({...payload,user_id:user.id}); const {data,error}=await query.select().single(); if(error){showToast(`No se pudo guardar la anotación: ${formatError(error)}`);return false} setDailyNotes(current=>existingNote?.id?current.map(n=>n.id===data.id?data:n):[data,...current]); return true }
   async function deleteDailyNote(id){const {error}=await supabase.from('daily_notes').delete().eq('id',id);if(error)return showToast(`No se pudo eliminar: ${formatError(error)}`);setDailyNotes(current=>current.filter(n=>n.id!==id))}
@@ -823,23 +834,52 @@ export default function Dashboard({ session }) {
   async function signOut() { await supabase.auth.signOut() }
 
   useEffect(() => {
+    if (!('serviceWorker' in navigator)) return undefined
+    function onServiceWorkerMessage(event) {
+      const message = event.data || {}
+      if (!['ASCENDA_REMINDER_PUSH', 'ASCENDA_NOTIFICATION_CLICK'].includes(message.type)) return
+      const payload = message.payload || {}
+      const incoming = payload.reminder
+      if (message.type === 'ASCENDA_NOTIFICATION_CLICK' && payload.deliveryId && !openedDeliveryRef.current.has(payload.deliveryId)) {
+        openedDeliveryRef.current.add(payload.deliveryId)
+        updateNotificationHistoryItem(payload.deliveryId, { action:'viewed', delivery_status:'viewed', viewed_at:new Date().toISOString() })
+      }
+      if (!incoming?.id) return
+      shownReminderRef.current.add(incoming.id)
+      setReminders((current) => current.map((item) => item.id === incoming.id ? { ...item, next_trigger_at:incoming.next_trigger_at || item.next_trigger_at, status:incoming.recurrence_type === 'none' ? 'sent' : 'active', last_sent_at:new Date().toISOString() } : item))
+      setActiveReminder((current) => current?.id === incoming.id ? { ...current, ...incoming } : current || incoming)
+      if (incoming.sound_enabled) playAscendaSound(incoming.priority === 'alarm' ? 'alarm' : 'reward', { ...settings, sounds_enabled:true })
+    }
+    navigator.serviceWorker.addEventListener('message', onServiceWorkerMessage)
+    return () => navigator.serviceWorker.removeEventListener('message', onServiceWorkerMessage)
+  }, [settings])
+
+  useEffect(() => {
+    if (loading) return
+    const deliveryId = getHashParams().get('delivery')
+    if (!deliveryId || openedDeliveryRef.current.has(deliveryId)) return
+    openedDeliveryRef.current.add(deliveryId)
+    updateNotificationHistoryItem(deliveryId, { action:'viewed', delivery_status:'viewed', viewed_at:new Date().toISOString() })
+  }, [loading, activeSection])
+
+  useEffect(() => {
     if (loading) return undefined
     async function checkReminders() {
       if (activeReminder) return
-      const due = reminders.find((reminder) => reminder.status === 'active' && new Date(reminder.next_trigger_at) <= new Date() && !shownReminderRef.current.has(reminder.id))
+      const due = reminders.find((reminder) => reminder.status === 'active' && reminder.enabled !== false && new Date(reminder.next_trigger_at) <= new Date() && !shownReminderRef.current.has(reminder.id))
       if (!due) return
       shownReminderRef.current.add(due.id)
       setActiveReminder(due)
-      await logReminder(due, 'shown')
-      if (due.sound_enabled) playAscendaSound('reward', { ...settings, sounds_enabled: true })
-      if ('Notification' in window && Notification.permission === 'granted') new Notification(due.title, { body: due.description || 'Tenés un recordatorio pendiente.' })
+      await logReminder(due, 'shown_internal', { delivery_status:'viewed', viewed_at:new Date().toISOString() })
+      if (due.sound_enabled) playAscendaSound(due.priority === 'alarm' ? 'alarm' : 'reward', { ...settings, sounds_enabled:true })
+      await showLocalSystemNotification(due.title, { body:due.description || 'Tenés un recordatorio pendiente.', tag:`ascenda-reminder-${due.id}`, requireInteraction:due.priority === 'alarm', data:{ url:'/#/recordatorios', reminder:due } }).catch(() => false)
     }
     checkReminders()
     const timer = setInterval(checkReminders, 15000)
     return () => clearInterval(timer)
   }, [loading, reminders, activeReminder, settings])
 
-  if (loading) return <main className="centered-screen"><p className="eyebrow">SINCRONIZANDO ASCENDA V6…</p></main>
+  if (loading) return <main className="centered-screen"><p className="eyebrow">SINCRONIZANDO ASCENDA V8.1…</p></main>
 
   const currentRoutine = routineModal.routine
   const currentGoal = goalModal.goal
@@ -859,11 +899,11 @@ export default function Dashboard({ session }) {
 
     <section className="main-area">
       <header className="topbar"><div><p className="eyebrow">{getTodayLabel().toUpperCase()}</p><h1>{getGreeting()}, {displayName}</h1></div><div className="topbar-actions"><span className="season-pill">♜ {seasonMetrics.rank.displayName}</span><span className="streak-pill">✦ {metrics.streak} días · +{metrics.streakBonus}% XP</span><button className="primary-button" type="button" onClick={() => setQuickCreateOpen(true)}>＋ Crear</button></div></header>
-      {databaseIssue && <div className="database-alert"><strong>Ejecutá el archivo supabase/schema.sql de la V6.</strong><span>{databaseIssue}</span></div>}
+      {databaseIssue && <div className="database-alert"><strong>Ejecutá primero `supabase/schema.sql` y después `supabase/migrations/V8_1_PUSH_REMINDERS.sql`.</strong><span>{databaseIssue}</span></div>}
       {activeSection === 'inicio' && <HomeView {...mainProps} nextActivity={nextActivity} nowTick={nowTick} navigate={navigate} openCreate={openCreate} toggleTask={toggleTask} toggleHabit={toggleHabit} toggleRoutineStep={toggleRoutineStep} isActionPending={isActionPending} />}
       {activeSection === 'agenda' && <AgendaWorkspace {...mainProps} selectedDate={today} onSaveDailyNote={saveDailyNote} onDeleteDailyNote={deleteDailyNote} onOpenEvent={(event, defaultDate) => setEventModal({ open:true, event, defaultDate })} onDeleteEvent={deleteEvent} onCreateTaskFromText={createTaskFromText} onCreateReminderFromText={createReminderFromText} />}
       {activeSection === 'notas' && <NotesView {...mainProps} onOpenNote={(note) => setNoteModal({open:true,note})} onDeleteNote={deleteNote} />}
-      {activeSection === 'recordatorios' && <RemindersView reminders={reminders} onOpenReminder={(reminder) => setReminderModal({open:true,reminder})} onDeleteReminder={deleteReminder} />}
+      {activeSection === 'recordatorios' && <RemindersView userId={user.id} reminders={reminders} notificationHistory={notificationHistory} onToast={showToast} onOpenReminder={(reminder) => setReminderModal({open:true,reminder})} onDeleteReminder={deleteReminder} onToggleReminder={toggleReminderEnabled} />}
       {activeSection === 'tareas' && <AdvancedTasksView {...mainProps} onNew={() => openCreate('task')} onEdit={(task) => setTaskModal({ open: true, task })} onToggle={toggleTask} onDelete={deleteTask} onToggleSubtask={toggleSubtask} />}
       {activeSection === 'habitos' && <HabitsView {...mainProps} openNewHabit={() => openCreate('habit')} toggleHabit={toggleHabit} deleteHabit={deleteHabit} />}
       {activeSection === 'rutinas' && <RoutinesView {...mainProps} openNewRoutine={() => openCreate('routine')} openEditRoutine={(routine) => setRoutineModal({ open: true, routine })} toggleRoutineStep={toggleRoutineStep} duplicateRoutine={duplicateRoutine} deleteRoutine={deleteRoutine} isActionPending={isActionPending} />}
@@ -879,7 +919,7 @@ export default function Dashboard({ session }) {
     <HabitModal open={habitModalOpen} categories={categories} onClose={() => setHabitModalOpen(false)} onSave={saveHabit} />
     <RoutineModal open={routineModal.open} routine={currentRoutine} routineSteps={routineSteps.filter((step) => step.routine_id === currentRoutine?.id)} categories={categories} onClose={() => setRoutineModal({ open: false, routine: null })} onSave={saveRoutine} />
     <EventModal open={eventModal.open} event={eventModal.event} defaultDate={eventModal.defaultDate} onClose={() => setEventModal({open:false,event:null,defaultDate:null})} onSave={saveEvent} />
-    <ReminderModal open={reminderModal.open} reminder={reminderModal.reminder} tasks={tasks} events={events} routines={routines} onClose={() => setReminderModal({open:false,reminder:null})} onSave={saveReminder} />
+    <ReminderModal open={reminderModal.open} reminder={reminderModal.reminder} tasks={tasks} events={events} routines={routines} habits={habits} goals={goals} onClose={() => setReminderModal({open:false,reminder:null})} onSave={saveReminder} />
     <NoteModal open={noteModal.open} note={noteModal.note} categories={categories} onClose={() => setNoteModal({open:false,note:null})} onSave={saveNote} onConvertTask={createTaskFromText} onConvertReminder={createReminderFromText} />
     <ReminderAlertModal reminder={activeReminder} onDismiss={dismissReminder} onSnooze={snoozeReminder} />
     <GoalModal open={goalModal.open} goal={currentGoal} milestones={milestones.filter((item) => item.goal_id === currentGoal?.id)} categories={categories} onClose={() => setGoalModal({ open: false, goal: null })} onSave={saveGoal} />

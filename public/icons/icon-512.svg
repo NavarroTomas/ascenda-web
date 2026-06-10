@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Ascenda">
+  <rect width="512" height="512" rx="112" fill="#101827"/>
+  <path d="M256 75 411 411h-75l-35-83h-92l-35 83H101L256 75Zm0 112-27 83h54l-27-83Z" fill="#38d9c6"/>
+  <circle cx="389" cy="123" r="29" fill="#f1c76d"/>
+</svg>
