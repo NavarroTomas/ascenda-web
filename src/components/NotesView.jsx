@@ -1,0 +1,10 @@
+import { useMemo, useState } from 'react'
+import { stripHtml } from '../lib/calendar.js'
+export default function NotesView({ notes, categories, onOpenNote, onDeleteNote }){
+  const [query,setQuery]=useState(''); const [showArchived,setShowArchived]=useState(false)
+  const filtered=useMemo(()=>notes.filter(n=>n.is_archived===showArchived).filter(n=>!query||`${n.title} ${n.is_locked?'':stripHtml(n.content_html||'')}`.toLowerCase().includes(query.toLowerCase())).sort((a,b)=>Number(b.is_pinned)-Number(a.is_pinned)||b.updated_at.localeCompare(a.updated_at)),[notes,query,showArchived])
+  return <section className="view-stack enter-up"><header className="section-heading"><div><p className="eyebrow">BIBLIOTECA PERSONAL</p><h2>Notas</h2><p>Guardá ideas, listas y referencias sin necesidad de asociarlas a una fecha.</p></div><button className="primary-button" onClick={()=>onOpenNote(null)}>＋ Nueva nota</button></header>
+    <div className="toolbar-panel panel"><input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar notas…"/><button className={`mini-action ${!showArchived?'active':''}`} onClick={()=>setShowArchived(false)}>Activas</button><button className={`mini-action ${showArchived?'active':''}`} onClick={()=>setShowArchived(true)}>Archivadas</button></div>
+    <div className="notes-grid">{filtered.map(note=><article className="note-card panel" style={{borderTopColor:note.color}} key={note.id}><div className="card-heading"><div><p className="eyebrow">{note.is_locked?'🔒 BLOQUEADA':note.is_pinned?'FIJADA':'NOTA'}</p><h3>{note.title}</h3></div><span>{note.is_pinned?'★':''}</span></div><p>{note.is_locked?'Contenido cifrado. Ingresá tu PIN para abrirlo.':stripHtml(note.content_html||'Sin contenido').slice(0,180)}</p><div className="row-actions end"><button className="mini-action" onClick={()=>onOpenNote(note)}>{note.is_locked?'Desbloquear':'Editar'}</button><button className="delete-button" onClick={()=>onDeleteNote(note.id)}>×</button></div></article>)}{!filtered.length&&<article className="content-panel panel"><p className="muted-copy">No hay notas para mostrar.</p></article>}</div>
+  </section>
+}

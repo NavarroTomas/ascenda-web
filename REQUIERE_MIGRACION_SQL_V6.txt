@@ -1,0 +1,1 @@
+Ejecutar supabase/schema.sql completo desde Supabase > SQL Editor antes de abrir Ascenda V6. La migración conserva los datos previos.

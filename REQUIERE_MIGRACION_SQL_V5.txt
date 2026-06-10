@@ -1,0 +1,2 @@
+ASCENDA WEB V5 requiere ejecutar el archivo supabase/schema.sql completo desde Supabase > SQL Editor.
+La migración conserva las tareas, hábitos, rutinas, objetivos, configuración y XP existentes.

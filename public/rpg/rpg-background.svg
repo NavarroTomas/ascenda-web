@@ -1,0 +1,36 @@
+<svg width="1920" height="1080" viewBox="0 0 1920 1080" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="160" y1="40" x2="1780" y2="1040" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#090A17"/>
+      <stop offset="0.48" stop-color="#11152B"/>
+      <stop offset="1" stop-color="#070912"/>
+    </linearGradient>
+    <linearGradient id="ridge" x1="0" y1="620" x2="1920" y2="1020" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#1C2345"/>
+      <stop offset="1" stop-color="#0B1022"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1450 210) rotate(145) scale(520 400)">
+      <stop stop-color="#7F6BFF" stop-opacity="0.34"/>
+      <stop offset="1" stop-color="#7F6BFF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="aqua" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(350 400) rotate(30) scale(500 330)">
+      <stop stop-color="#2DD8CF" stop-opacity="0.16"/>
+      <stop offset="1" stop-color="#2DD8CF" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#bg)"/>
+  <rect width="1920" height="1080" fill="url(#glow)"/>
+  <rect width="1920" height="1080" fill="url(#aqua)"/>
+  <circle cx="1490" cy="190" r="96" stroke="#C4B9FF" stroke-opacity="0.3" stroke-width="2"/>
+  <circle cx="1490" cy="190" r="66" stroke="#C4B9FF" stroke-opacity="0.14"/>
+  <path d="M0 870L190 735L310 790L480 630L600 730L790 560L970 715L1130 620L1300 755L1470 600L1680 760L1920 650V1080H0V870Z" fill="url(#ridge)" fill-opacity="0.72"/>
+  <path d="M0 935L230 790L440 890L670 720L910 860L1140 740L1410 900L1640 775L1920 905V1080H0V935Z" fill="#090D1B"/>
+  <g opacity="0.42" stroke="#6B5CE7" stroke-width="1.5">
+    <path d="M140 150H460"/><path d="M140 150V330"/><path d="M1780 430H1560"/><path d="M1780 430V650"/>
+    <path d="M250 235L278 207L306 235L278 263L250 235Z"/>
+    <path d="M1650 530L1678 502L1706 530L1678 558L1650 530Z"/>
+  </g>
+  <g fill="#AFA4FF" fill-opacity="0.5">
+    <circle cx="280" cy="100" r="2"/><circle cx="720" cy="170" r="2"/><circle cx="1040" cy="120" r="2"/><circle cx="1700" cy="270" r="2"/><circle cx="1380" cy="360" r="2"/><circle cx="520" cy="390" r="2"/>
+  </g>
+</svg>
