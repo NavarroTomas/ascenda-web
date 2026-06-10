@@ -1,8 +1,12 @@
 {
-  "name": "ascenda-web-supabase-v6",
+  "name": "ascenda-web",
   "private": true,
-  "version": "0.6.0",
+  "version": "0.8.0",
   "type": "module",
+  "engines": {
+    "node": "22.x"
+  },
+  "packageManager": "pnpm@10.0.0",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
