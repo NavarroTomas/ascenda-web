@@ -142,7 +142,7 @@ export default function OnboardingFlow({ onCancel }) {
         <div className="onboarding-success-mark">✓</div>
         <p className="eyebrow">CUENTA CREADA</p>
         <h1>Tu sistema está listo, {answers.display_name.trim()}.</h1>
-        <p>Revisá tu correo electrónico para confirmar la cuenta. Después vas a poder ingresar con tu configuración inicial aplicada.</p>
+        <p>Tu cuenta fue creada correctamente. Volvé al ingreso para acceder con tu configuración inicial aplicada.</p>
         <button className="primary-button" type="button" onClick={onCancel}>Volver al ingreso</button>
       </section>
     </main>

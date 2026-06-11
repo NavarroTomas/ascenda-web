@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase.js'
+import ForgotPasswordModal from './ForgotPasswordModal.jsx'
 import OnboardingFlow from './OnboardingFlow.jsx'
 
 export default function AuthScreen() {
   const [showOnboarding, setShowOnboarding] = useState(false)
+  const [forgotOpen, setForgotOpen] = useState(false)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [feedback, setFeedback] = useState({ type: '', message: '' })
@@ -44,6 +46,7 @@ export default function AuthScreen() {
         <div><p className="eyebrow">BIENVENIDO DE NUEVO</p><h2>Ingresá a tu sistema</h2></div>
         <label><span>Correo electrónico</span><input required type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="nombre@correo.com" autoComplete="email" /></label>
         <label><span>Contraseña</span><input required minLength="6" type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Mínimo 6 caracteres" autoComplete="current-password" /></label>
+        <button className="auth-link-button" type="button" onClick={() => setForgotOpen(true)}>¿Olvidaste tu contraseña?</button>
         {feedback.message && <p className={`form-feedback ${feedback.type}`}>{feedback.message}</p>}
         <button className="primary-button wide" type="submit" disabled={submitting}>{submitting ? 'Ingresando…' : 'Ingresar'}</button>
         <div className="auth-register-callout">
@@ -52,5 +55,6 @@ export default function AuthScreen() {
         </div>
       </form>
     </section>
+    <ForgotPasswordModal open={forgotOpen} initialEmail={email} onClose={() => setForgotOpen(false)} />
   </main>
 }

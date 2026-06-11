@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import AccountSecurityPanel from './AccountSecurityPanel.jsx'
 import CategoryModal from './CategoryModal.jsx'
 import { DEFAULT_CATEGORIES } from '../data/defaultCategories.js'
 import { THEME_PRESETS } from '../data/themePresets.js'
@@ -9,7 +10,7 @@ const MODE_OPTIONS = [
   { id: 'rpg', title: 'RPG', description: 'Experiencia visual intensa con progreso, rangos y celebraciones.', icon: '✦' },
 ]
 
-export default function SettingsView({ profile, settings, customCategories, onSaveSettings, onSaveProfile, onSaveCategory, onDeleteCategory, onToggleSidebar }) {
+export default function SettingsView({ user, profile, settings, customCategories, onSaveSettings, onSaveProfile, onSaveCategory, onDeleteCategory, onToggleSidebar, onToast }) {
   const [form, setForm] = useState({ ...settings, display_name: profile?.display_name || '' })
   const [saving, setSaving] = useState(false)
   const [categoryModal, setCategoryModal] = useState({ open: false, category: null })
@@ -91,6 +92,7 @@ export default function SettingsView({ profile, settings, customCategories, onSa
           {customCategories.map((category) => <div className="category-chip" key={category.id}><i style={{ background: category.color }} /><span>{category.icon}</span><strong>{category.name}</strong><div className="row-actions"><button className="mini-action" type="button" onClick={() => setCategoryModal({ open: true, category })}>Editar</button><button className="delete-button" type="button" onClick={() => onDeleteCategory(category.id)}>×</button></div></div>)}
         </div>
       </article>
+      <AccountSecurityPanel user={user} onToast={onToast} />
     </section>
 
     <CategoryModal open={categoryModal.open} category={categoryModal.category} onClose={() => setCategoryModal({ open: false, category: null })} onSave={onSaveCategory} />

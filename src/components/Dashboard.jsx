@@ -102,6 +102,44 @@ function makeSourceKey(id, date) {
   return `${id}:${date}`
 }
 
+function getWeekStartISO(date = new Date()) {
+  const value = new Date(date)
+  value.setHours(0, 0, 0, 0)
+  const day = value.getDay()
+  value.setDate(value.getDate() - (day === 0 ? 6 : day - 1))
+  return toDateISO(value)
+}
+
+function getWeekEndISO(weekStart) {
+  return toDateISO(addDays(new Date(`${weekStart}T00:00:00`), 6))
+}
+
+function habitFrequencyType(habit) { return habit.frequency_type || 'daily' }
+function habitLogsInWeek(habitLogs, habitId, weekStart = getWeekStartISO()) {
+  const weekEnd = getWeekEndISO(weekStart)
+  return habitLogs.filter((log) => log.habit_id === habitId && log.log_date >= weekStart && log.log_date <= weekEnd)
+}
+function habitWeeklyProgress(habit, habitLogs, weekStart = getWeekStartISO()) {
+  return habitLogsInWeek(habitLogs, habit.id, weekStart).reduce((sum, log) => sum + Number(log.value || 0), 0)
+}
+function habitWeeklyTarget(habit) { return Math.max(1, Number(habit.weekly_target || 1)) }
+function habitDoneToday(habit, habitLogs, today) {
+  if (habitFrequencyType(habit) === 'weekly_target') return habitWeeklyProgress(habit, habitLogs) >= habitWeeklyTarget(habit)
+  return habitLogs.some((log) => log.habit_id === habit.id && log.log_date === today)
+}
+function habitWeeklyStreak(habit, habitLogs) {
+  if (habitFrequencyType(habit) !== 'weekly_target') return 0
+  const target = habitWeeklyTarget(habit)
+  let streak = 0
+  let weekStart = getWeekStartISO()
+  for (let index = 0; index < 104; index += 1) {
+    if (habitWeeklyProgress(habit, habitLogs, weekStart) < target) break
+    streak += 1
+    weekStart = toDateISO(addDays(new Date(`${weekStart}T00:00:00`), -7))
+  }
+  return streak
+}
+
 function nextReminderTrigger(reminder) {
   const next = new Date(reminder.next_trigger_at)
   const amount = Math.max(1, Number(reminder.recurrence_interval || 1))
@@ -298,7 +336,7 @@ export default function Dashboard({ session }) {
     const week = weekDays.map((day) => ({ ...day, value: xpEvents.filter((event) => event.occurred_on === day.iso).reduce((sum, event) => sum + Number(event.amount || 0), 0) }))
     const weekMax = Math.max(1, ...week.map((day) => day.value))
     const tasksToday = tasks.filter((task) => task.due_date === today && task.status !== 'cancelada')
-    const habitsDone = habits.filter((habit) => habitLogs.some((log) => log.habit_id === habit.id && log.log_date === today))
+    const habitsDone = habits.filter((habit) => habitDoneToday(habit, habitLogs, today))
     const dueRoutines = routines.filter((routine) => routineIsDueToday(routine))
     const routinesDone = dueRoutines.filter((routine) => routineLogs.some((log) => log.routine_id === routine.id && log.log_date === today && log.completed))
     const totalDaily = tasksToday.length + habits.length + dueRoutines.length
@@ -340,7 +378,7 @@ export default function Dashboard({ session }) {
       }
     })
     goals.filter((goal) => goal.status === 'active' && goal.due_date).forEach((goal) => options.push({ type: 'Objetivo', title: goal.title, date: dateTimeFromParts(goal.due_date), subtitle: 'Fecha límite' }))
-    habits.filter((habit) => !habitLogs.some((log) => log.habit_id === habit.id && log.log_date === today)).forEach((habit) => options.push({ type: 'Hábito', title: habit.title, date: dateTimeFromParts(today), subtitle: 'Pendiente de hoy' }))
+    habits.filter((habit) => !habitDoneToday(habit, habitLogs, today)).forEach((habit) => options.push({ type: 'Hábito', title: habit.title, date: dateTimeFromParts(today), subtitle: habitFrequencyType(habit) === 'weekly_target' ? `${habitWeeklyProgress(habit, habitLogs)} de ${habitWeeklyTarget(habit)} sesiones esta semana` : 'Pendiente de hoy' }))
     events.filter((event) => event.status !== 'cancelled' && event.event_date).forEach((event) => options.push({ type: 'Evento', title: event.title, date: dateTimeFromParts(event.event_date, event.all_day ? '23:59' : event.start_time), subtitle: event.all_day ? 'Durante el día' : safeTime(event.start_time) || 'Sin horario' }))
     reminders.filter((reminder) => reminder.status === 'active').forEach((reminder) => options.push({ type: 'Recordatorio', title: reminder.title, date: new Date(reminder.next_trigger_at), subtitle: reminder.priority === 'alarm' ? 'Alarma' : 'Aviso programado' }))
     return options.filter((item) => item.date && item.date >= now).sort((a, b) => a.date - b.date)[0] || null
@@ -531,6 +569,7 @@ export default function Dashboard({ session }) {
   }
 
   async function deleteTask(taskId) {
+    if (!window.confirm('¿Eliminar esta tarea? Esta acción no se puede deshacer.')) return
     const { error } = await supabase.from('tasks').delete().eq('id', taskId)
     if (error) { showToast(`No se pudo eliminar: ${formatError(error)}`); return }
     await removeXp('task', taskId)
@@ -555,7 +594,7 @@ export default function Dashboard({ session }) {
     showToast(existingEvent?.id ? 'Evento actualizado.' : 'Evento creado.')
     return true
   }
-  async function deleteEvent(id) { const { error } = await supabase.from('events').delete().eq('id', id); if (error) return showToast(`No se pudo eliminar el evento: ${formatError(error)}`); setEvents((current) => current.filter((item) => item.id !== id)); showToast('Evento eliminado.') }
+  async function deleteEvent(id) { if (!window.confirm('¿Eliminar este evento? Esta acción no se puede deshacer.')) return; const { error } = await supabase.from('events').delete().eq('id', id); if (error) return showToast(`No se pudo eliminar el evento: ${formatError(error)}`); setEvents((current) => current.filter((item) => item.id !== id)); showToast('Evento eliminado.') }
 
   async function saveReminder(payload, existingReminder) {
     const query = existingReminder?.id ? supabase.from('reminders').update(payload).eq('id', existingReminder.id) : supabase.from('reminders').insert({ ...payload, user_id: user.id })
@@ -566,7 +605,7 @@ export default function Dashboard({ session }) {
     showToast('Recordatorio guardado.')
     return true
   }
-  async function deleteReminder(id) { const { error } = await supabase.from('reminders').delete().eq('id', id); if (error) return showToast(`No se pudo eliminar: ${formatError(error)}`); setReminders((current) => current.filter((item) => item.id !== id)); showToast('Recordatorio eliminado.') }
+  async function deleteReminder(id) { if (!window.confirm('¿Eliminar este recordatorio? Esta acción no se puede deshacer.')) return; const { error } = await supabase.from('reminders').delete().eq('id', id); if (error) return showToast(`No se pudo eliminar: ${formatError(error)}`); setReminders((current) => current.filter((item) => item.id !== id)); showToast('Recordatorio eliminado.') }
   async function toggleReminderEnabled(reminder) { const enabled = reminder.enabled === false; const { data, error } = await supabase.from('reminders').update({ enabled }).eq('id', reminder.id).select().single(); if (error) return showToast(`No se pudo actualizar: ${formatError(error)}`); shownReminderRef.current.delete(reminder.id); setReminders((current) => current.map((item) => item.id === data.id ? data : item)); showToast(enabled ? 'Recordatorio activado.' : 'Recordatorio pausado.') }
   async function updateNotificationHistoryItem(id, patch) { const { data, error } = await supabase.from('notification_history').update(patch).eq('id', id).select().maybeSingle(); if (!error && data) setNotificationHistory((current) => current.map((item) => item.id === data.id ? data : item)); return data }
   async function logReminder(reminder, action, patch = {}) { const payload = { user_id:user.id, reminder_id:reminder.id, title:reminder.title, action, ...patch }; if (reminder._delivery_id) return updateNotificationHistoryItem(reminder._delivery_id, { action, ...patch }); const { data } = await supabase.from('notification_history').insert(payload).select().single(); if (data) setNotificationHistory((current) => [data, ...current]); return data }
@@ -574,9 +613,9 @@ export default function Dashboard({ session }) {
   async function snoozeReminder(reminder, minutes) { const next = new Date(Date.now()+minutes*60000).toISOString(); const snoozedAt = new Date().toISOString(); await logReminder(reminder, 'snoozed', { delivery_status:'snoozed', snoozed_until:next }); const { data, error } = await supabase.from('reminders').update({ next_trigger_at:next, status:'active', enabled:true, last_snoozed_at:snoozedAt, last_sent_at:null }).eq('id', reminder.id).select().single(); if (!error && data) setReminders((current)=>current.map(r=>r.id===reminder.id?data:r)); shownReminderRef.current.delete(reminder.id); setActiveReminder(null) }
 
   async function saveDailyNote(payload, existingNote) { const query=existingNote?.id?supabase.from('daily_notes').update(payload).eq('id',existingNote.id):supabase.from('daily_notes').insert({...payload,user_id:user.id}); const {data,error}=await query.select().single(); if(error){showToast(`No se pudo guardar la anotación: ${formatError(error)}`);return false} setDailyNotes(current=>existingNote?.id?current.map(n=>n.id===data.id?data:n):[data,...current]); return true }
-  async function deleteDailyNote(id){const {error}=await supabase.from('daily_notes').delete().eq('id',id);if(error)return showToast(`No se pudo eliminar: ${formatError(error)}`);setDailyNotes(current=>current.filter(n=>n.id!==id))}
+  async function deleteDailyNote(id){if(!window.confirm('¿Eliminar esta entrada de agenda? Esta acción no se puede deshacer.'))return;const {error}=await supabase.from('daily_notes').delete().eq('id',id);if(error)return showToast(`No se pudo eliminar: ${formatError(error)}`);setDailyNotes(current=>current.filter(n=>n.id!==id))}
   async function saveNote(payload, existingNote) { const query=existingNote?.id?supabase.from('notes').update(payload).eq('id',existingNote.id):supabase.from('notes').insert({...payload,user_id:user.id}); const {data,error}=await query.select().single();if(error){showToast(`No se pudo guardar la nota: ${formatError(error)}`);return false}setNotes(current=>existingNote?.id?current.map(n=>n.id===data.id?data:n):[data,...current]);showToast('Nota guardada.');return true }
-  async function deleteNote(id){const {error}=await supabase.from('notes').delete().eq('id',id);if(error)return showToast(`No se pudo eliminar la nota: ${formatError(error)}`);setNotes(current=>current.filter(n=>n.id!==id));showToast('Nota eliminada.')}
+  async function deleteNote(id){if(!window.confirm('¿Eliminar esta nota? Esta acción no se puede deshacer.'))return;const {error}=await supabase.from('notes').delete().eq('id',id);if(error)return showToast(`No se pudo eliminar la nota: ${formatError(error)}`);setNotes(current=>current.filter(n=>n.id!==id));showToast('Nota eliminada.')}
   function createTaskFromText(text){setTaskModal({open:true,task:{title:(text||'Nueva tarea').slice(0,180),description:null,status:'pendiente'}})}
   function createReminderFromText(text){setReminderModal({open:true,reminder:{title:(text||'Nuevo recordatorio').slice(0,180)}})}
 
@@ -588,7 +627,8 @@ export default function Dashboard({ session }) {
     return true
   }
 
-  async function toggleHabit(habit) {
+  async function toggleHabit(habit, weeklyDelta = 1) {
+    if (habitFrequencyType(habit) === 'weekly_target') return changeWeeklyHabitSessions(habit, weeklyDelta)
     const sourceKey = makeSourceKey(habit.id, today)
     const actionKey = `habit:${sourceKey}`
     if (!beginAction(actionKey)) return
@@ -613,15 +653,47 @@ export default function Dashboard({ session }) {
     }
   }
 
+  async function changeWeeklyHabitSessions(habit, delta) {
+    const actionKey = `weekly-habit:${habit.id}:${today}`
+    if (!beginAction(actionKey)) return
+    try {
+      const { data: databaseLog, error: readError } = await supabase.from('habit_logs').select('*').eq('user_id', user.id).eq('habit_id', habit.id).eq('log_date', today).maybeSingle()
+      if (readError) { showToast(`No se pudo consultar el hábito: ${formatError(readError)}`); return }
+      const currentValue = Number(databaseLog?.value || 0)
+      const nextValue = Math.max(0, currentValue + delta)
+      if (nextValue === currentValue) return
+      if (nextValue === 0 && databaseLog) {
+        const { error } = await supabase.from('habit_logs').delete().eq('id', databaseLog.id)
+        if (error) { showToast(`No se pudo actualizar el hábito: ${formatError(error)}`); return }
+        setHabitLogs((current) => current.filter((log) => log.id !== databaseLog.id))
+      } else {
+        const { data, error } = await supabase.from('habit_logs').upsert({ user_id: user.id, habit_id: habit.id, log_date: today, value: nextValue }, { onConflict: 'user_id,habit_id,log_date' }).select().single()
+        if (error) { showToast(`No se pudo registrar la sesión: ${formatError(error)}`); return }
+        setHabitLogs((current) => [data, ...current.filter((log) => !(log.habit_id === habit.id && log.log_date === today))])
+      }
+      if (delta > 0) {
+        const reward = await awardXp({ sourceType: 'habit_session', sourceKey: `${habit.id}:${today}:${nextValue}`, reason: `Sesión registrada: ${habit.title}`, baseAmount: habit.xp_reward || 8 })
+        const nextProgress = habitWeeklyProgress(habit, habitLogs.filter((log) => !(log.habit_id === habit.id && log.log_date === today)).concat(nextValue ? [{ habit_id: habit.id, log_date: today, value: nextValue }] : []))
+        showToast(`Sesión registrada · ${nextProgress} de ${habitWeeklyTarget(habit)} esta semana · +${reward.amount} XP`)
+      } else {
+        await removeXp('habit_session', `${habit.id}:${today}:${currentValue}`)
+        showToast('Última sesión de hoy deshecha.')
+      }
+    } finally {
+      endAction(actionKey)
+    }
+  }
+
   async function deleteHabit(habitId) {
+    if (!window.confirm('¿Eliminar este hábito y todo su historial? Esta acción no se puede deshacer.')) return
     const { error } = await supabase.from('habits').delete().eq('id', habitId)
     if (error) { showToast(`No se pudo eliminar el hábito: ${formatError(error)}`); return }
-    await supabase.from('xp_events').delete().eq('source_type', 'habit').like('source_key', `${habitId}:%`)
+    await supabase.from('xp_events').delete().in('source_type', ['habit', 'habit_session']).like('source_key', `${habitId}:%`)
     if (activeSeason) {
-      await supabase.from('season_point_events').delete().eq('season_id', activeSeason.id).eq('source_type', 'habit').like('source_key', `${habitId}:%`)
+      await supabase.from('season_point_events').delete().eq('season_id', activeSeason.id).in('source_type', ['habit', 'habit_session']).like('source_key', `${habitId}:%`)
       await syncSeasonProgress()
     }
-    setXpEvents((current) => current.filter((event) => !(event.source_type === 'habit' && event.source_key.startsWith(`${habitId}:`))))
+    setXpEvents((current) => current.filter((event) => !(['habit', 'habit_session'].includes(event.source_type) && event.source_key.startsWith(`${habitId}:`))))
     setHabits((current) => current.filter((habit) => habit.id !== habitId))
     setHabitLogs((current) => current.filter((log) => log.habit_id !== habitId))
     showToast('Hábito eliminado.')
@@ -720,6 +792,7 @@ export default function Dashboard({ session }) {
   }
 
   async function deleteRoutine(routineId) {
+    if (!window.confirm('¿Eliminar esta rutina y todo su historial? Esta acción no se puede deshacer.')) return
     const { error } = await supabase.from('routines').delete().eq('id', routineId)
     if (error) { showToast(`No se pudo eliminar la rutina: ${formatError(error)}`); return }
     await supabase.from('xp_events').delete().like('source_key', `${routineId}:%`)
@@ -788,6 +861,7 @@ export default function Dashboard({ session }) {
   }
 
   async function deleteGoal(goalId) {
+    if (!window.confirm('¿Eliminar este objetivo y sus hitos? Esta acción no se puede deshacer.')) return
     const { error } = await supabase.from('goals').delete().eq('id', goalId)
     if (error) { showToast(`No se pudo eliminar el objetivo: ${formatError(error)}`); return }
     await removeXp('goal', goalId)
@@ -825,6 +899,7 @@ export default function Dashboard({ session }) {
   }
 
   async function deleteCategory(categoryId) {
+    if (!window.confirm('¿Eliminar esta categoría personalizada? Los registros conservarán el nombre anterior.')) return
     const { error } = await supabase.from('custom_categories').delete().eq('id', categoryId)
     if (error) { showToast(`No se pudo eliminar la categoría: ${formatError(error)}`); return }
     setCustomCategories((current) => current.filter((item) => item.id !== categoryId))
@@ -879,7 +954,7 @@ export default function Dashboard({ session }) {
     return () => clearInterval(timer)
   }, [loading, reminders, activeReminder, settings])
 
-  if (loading) return <main className="centered-screen"><p className="eyebrow">SINCRONIZANDO ASCENDA V8.1…</p></main>
+  if (loading) return <main className="centered-screen"><p className="eyebrow">SINCRONIZANDO ASCENDA V8.2…</p></main>
 
   const currentRoutine = routineModal.routine
   const currentGoal = goalModal.goal
@@ -899,7 +974,7 @@ export default function Dashboard({ session }) {
 
     <section className="main-area">
       <header className="topbar"><div><p className="eyebrow">{getTodayLabel().toUpperCase()}</p><h1>{getGreeting()}, {displayName}</h1></div><div className="topbar-actions"><span className="season-pill">♜ {seasonMetrics.rank.displayName}</span><span className="streak-pill">✦ {metrics.streak} días · +{metrics.streakBonus}% XP</span><button className="primary-button" type="button" onClick={() => setQuickCreateOpen(true)}>＋ Crear</button></div></header>
-      {databaseIssue && <div className="database-alert"><strong>Ejecutá primero `supabase/schema.sql` y después `supabase/migrations/V8_1_PUSH_REMINDERS.sql`.</strong><span>{databaseIssue}</span></div>}
+      {databaseIssue && <div className="database-alert"><strong>Ejecutá `supabase/schema.sql`, la migración V8.1 y después `supabase/migrations/V8_2_ACCOUNT_SECURITY_AND_WEEKLY_HABITS.sql`.</strong><span>{databaseIssue}</span></div>}
       {activeSection === 'inicio' && <HomeView {...mainProps} nextActivity={nextActivity} nowTick={nowTick} navigate={navigate} openCreate={openCreate} toggleTask={toggleTask} toggleHabit={toggleHabit} toggleRoutineStep={toggleRoutineStep} isActionPending={isActionPending} />}
       {activeSection === 'agenda' && <AgendaWorkspace {...mainProps} selectedDate={today} onSaveDailyNote={saveDailyNote} onDeleteDailyNote={deleteDailyNote} onOpenEvent={(event, defaultDate) => setEventModal({ open:true, event, defaultDate })} onDeleteEvent={deleteEvent} onCreateTaskFromText={createTaskFromText} onCreateReminderFromText={createReminderFromText} />}
       {activeSection === 'notas' && <NotesView {...mainProps} onOpenNote={(note) => setNoteModal({open:true,note})} onDeleteNote={deleteNote} />}
@@ -911,7 +986,7 @@ export default function Dashboard({ session }) {
       {activeSection === 'temporada' && <SeasonView activeSeason={activeSeason} seasonMetrics={seasonMetrics} seasonHistory={seasonHistory} settings={settings} />}
       {activeSection === 'perfil' && <ProfileView session={session} settings={settings} onProfileChanged={setProfile} />}
       {activeSection === 'progreso' && <ProgressView {...mainProps} />}
-      {activeSection === 'configuracion' && <SettingsView profile={profile} settings={settings} customCategories={customCategories} onSaveSettings={saveSettings} onSaveProfile={saveProfile} onSaveCategory={saveCategory} onDeleteCategory={deleteCategory} onToggleSidebar={toggleSidebar} />}
+      {activeSection === 'configuracion' && <SettingsView user={user} profile={profile} settings={settings} customCategories={customCategories} onSaveSettings={saveSettings} onSaveProfile={saveProfile} onSaveCategory={saveCategory} onDeleteCategory={deleteCategory} onToggleSidebar={toggleSidebar} onToast={showToast} />}
     </section>
 
     <QuickCreateModal open={quickCreateOpen} onClose={() => setQuickCreateOpen(false)} onSelect={openCreate} />
@@ -944,7 +1019,7 @@ function HomeView({ userId, tasks, habits, habitLogs, routines, routineSteps, ro
 
     <section className="dashboard-grid">
       <article className="content-panel panel"><div className="card-heading"><div><p className="eyebrow">TAREAS</p><h2>Pendientes</h2></div><button className="mini-action" type="button" onClick={() => navigate('tareas')}>Ver todas</button></div>{pendingTasks.length ? <div className="task-list">{pendingTasks.map((task) => <CompactTaskRow task={task} toggleTask={toggleTask} key={task.id} />)}</div> : <EmptyState text="No tenés tareas pendientes." action="Crear tarea" onClick={() => openCreate('task')} />}</article>
-      <article className="content-panel panel"><div className="card-heading"><div><p className="eyebrow">HÁBITOS</p><h2>Constancia diaria</h2></div><button className="mini-action" type="button" onClick={() => navigate('habitos')}>Gestionar</button></div>{habits.length ? <div className="habit-quick-list">{habits.slice(0, 5).map((habit) => <HabitQuickRow habit={habit} done={habitLogs.some((log) => log.habit_id === habit.id && log.log_date === today)} toggleHabit={toggleHabit} key={habit.id} />)}</div> : <EmptyState text="Todavía no creaste hábitos." action="Crear hábito" onClick={() => openCreate('habit')} />}</article>
+      <article className="content-panel panel"><div className="card-heading"><div><p className="eyebrow">HÁBITOS</p><h2>Constancia activa</h2></div><button className="mini-action" type="button" onClick={() => navigate('habitos')}>Gestionar</button></div>{habits.length ? <div className="habit-quick-list">{habits.slice(0, 5).map((habit) => <HabitQuickRow habit={habit} habitLogs={habitLogs} today={today} toggleHabit={toggleHabit} key={habit.id} />)}</div> : <EmptyState text="Todavía no creaste hábitos." action="Crear hábito" onClick={() => openCreate('habit')} />}</article>
     </section>
 
     {settings.experience_mode !== 'simple' && <section className="dashboard-grid">
@@ -965,7 +1040,7 @@ function AgendaView({ tasks, routines, goals, habits, habitLogs, today, openEdit
       return dates.slice(0, 2)
     }),
     ...goals.filter((goal) => goal.due_date && goal.status === 'active').map((goal) => ({ id: `goal-${goal.id}`, date: goal.due_date, time: '', title: goal.title, type: 'Objetivo', detail: `${goal.progress_percent}% completado` })),
-    ...habits.filter((habit) => !habitLogs.some((log) => log.habit_id === habit.id && log.log_date === today)).map((habit) => ({ id: `habit-${habit.id}`, date: today, time: '', title: habit.title, type: 'Hábito', detail: 'Pendiente de hoy' })),
+    ...habits.filter((habit) => !habitDoneToday(habit, habitLogs, today)).map((habit) => ({ id: `habit-${habit.id}`, date: today, time: '', title: habit.title, type: 'Hábito', detail: habitFrequencyType(habit) === 'weekly_target' ? `${habitWeeklyProgress(habit, habitLogs)} de ${habitWeeklyTarget(habit)} sesiones esta semana` : 'Pendiente de hoy' })),
   ].sort((a, b) => `${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`))
   const grouped = groupByDate(items, 'date')
   return <section className="view-stack enter-up"><SectionHeading eyebrow="PLANIFICACIÓN" title="Agenda" description="Vista cronológica de tareas, rutinas, hábitos pendientes y fechas límite de objetivos." />{Object.keys(grouped).length ? Object.entries(grouped).map(([date, dayItems]) => <article className="content-panel panel" key={date}><div className="section-date"><p className="eyebrow">{date === today ? 'HOY' : 'AGENDA'}</p><h2>{formatLongDate(date)}</h2></div><div className="agenda-list">{dayItems.map((item) => <button className="agenda-row" type="button" onClick={item.onClick} key={item.id}><span className="agenda-time">{item.time || '—'}</span><span className="priority-dot" /><span className="agenda-copy"><strong>{item.title}</strong><small>{item.type} · {item.detail}</small></span></button>)}</div></article>) : <EmptyPanel text="Todavía no hay actividades planificadas." />}</section>
@@ -979,7 +1054,15 @@ function TasksView({ tasks, openNewTask, openEditTask, toggleTask, deleteTask })
 }
 
 function HabitsView({ habits, habitLogs, today, recentDays, openNewHabit, toggleHabit, deleteHabit }) {
-  return <section className="view-stack enter-up"><SectionHeading eyebrow="CONSTANCIA" title="Hábitos" description="Registrá acciones repetibles y observá tu continuidad durante los últimos catorce días." action="Nuevo hábito" onClick={openNewHabit} /><article className="content-panel panel">{habits.length ? <div className="habit-management-list">{habits.map((habit) => { const doneToday = habitLogs.some((log) => log.habit_id === habit.id && log.log_date === today); const completedDays = recentDays.filter((day) => habitLogs.some((log) => log.habit_id === habit.id && log.log_date === day.iso)).length; return <article className="habit-management-card" key={habit.id}><div className="habit-management-heading"><div><p className="eyebrow">{habit.category.toUpperCase()}</p><h2>{habit.title}</h2><span>{habit.target} {habit.unit} por día · {completedDays} de {recentDays.length} días registrados · +{habit.xp_reward || 8} XP base</span></div><div className="row-actions"><button className={`habit-toggle ${doneToday ? 'done' : ''}`} type="button" onClick={() => toggleHabit(habit)}>{doneToday ? '✓ Completado hoy' : '○ Marcar completo'}</button><button className="delete-button" type="button" onClick={() => deleteHabit(habit.id)}>×</button></div></div><div className="habit-history">{recentDays.map((day) => { const done = habitLogs.some((log) => log.habit_id === habit.id && log.log_date === day.iso); return <span className={`history-day ${done ? 'done' : ''} ${day.iso === today ? 'today' : ''}`} key={day.iso}><small>{day.weekday}</small><b>{day.day}</b></span> })}</div></article>})}</div> : <EmptyState text="Todavía no creaste hábitos." action="Crear hábito" onClick={openNewHabit} />}</article></section>
+  return <section className="view-stack enter-up"><SectionHeading eyebrow="CONSTANCIA" title="Hábitos" description="Registrá hábitos diarios o metas semanales flexibles sin perder el historial anterior." action="Nuevo hábito" onClick={openNewHabit} /><article className="content-panel panel">{habits.length ? <div className="habit-management-list">{habits.map((habit) => {
+    const weekly = habitFrequencyType(habit) === 'weekly_target'
+    const doneToday = habitLogs.some((log) => log.habit_id === habit.id && log.log_date === today)
+    const completedDays = recentDays.filter((day) => habitLogs.some((log) => log.habit_id === habit.id && log.log_date === day.iso)).length
+    const weeklyProgress = habitWeeklyProgress(habit, habitLogs)
+    const weeklyTarget = habitWeeklyTarget(habit)
+    const weeklyCompleted = weeklyProgress >= weeklyTarget
+    return <article className="habit-management-card" key={habit.id}><div className="habit-management-heading"><div><p className="eyebrow">{habit.category.toUpperCase()}</p><h2>{habit.title}</h2><span>{weekly ? `${weeklyProgress} de ${weeklyTarget} sesiones esta semana · racha: ${habitWeeklyStreak(habit, habitLogs)} semanas` : `${habit.target} ${habit.unit} por registro · ${completedDays} de ${recentDays.length} días registrados`} · +{habit.xp_reward || 8} XP base</span></div><div className="row-actions">{weekly ? <><button className={`habit-toggle ${weeklyCompleted ? 'done' : ''}`} type="button" onClick={() => toggleHabit(habit)}>{weeklyCompleted ? '＋ Registrar otra sesión' : '＋ Registrar sesión'}</button><button className="mini-action" disabled={!doneToday} type="button" onClick={() => toggleHabit(habit, -1)}>Deshacer hoy</button></> : <button className={`habit-toggle ${doneToday ? 'done' : ''}`} type="button" onClick={() => toggleHabit(habit)}>{doneToday ? '✓ Completado hoy' : '○ Marcar completo'}</button>}<button className="delete-button" type="button" onClick={() => deleteHabit(habit.id)}>×</button></div></div>{weekly && <div className="weekly-habit-progress"><div className="progress-track"><i style={{ width: `${percentage(weeklyProgress, weeklyTarget)}%` }} /></div><small>{weeklyCompleted ? 'Objetivo semanal cumplido' : `${Math.max(0, weeklyTarget - weeklyProgress)} sesiones pendientes esta semana`}</small></div>}<div className="habit-history">{recentDays.map((day) => { const log = habitLogs.find((item) => item.habit_id === habit.id && item.log_date === day.iso); const done = Boolean(log); return <span className={`history-day ${done ? 'done' : ''} ${day.iso === today ? 'today' : ''}`} key={day.iso}><small>{day.weekday}</small><b>{weekly && Number(log?.value || 0) > 1 ? log.value : day.day}</b></span> })}</div></article>
+  })}</div> : <EmptyState text="Todavía no creaste hábitos." action="Crear hábito" onClick={openNewHabit} />}</article></section>
 }
 
 function RoutinesView({ routines, routineSteps, routineStepLogs, routineLogs, today, openNewRoutine, openEditRoutine, toggleRoutineStep, duplicateRoutine, deleteRoutine, isActionPending }) {
@@ -1000,7 +1083,7 @@ function EmptyPanel({ text, action, onClick }) { return <article className="cont
 function EmptyState({ text, action, onClick }) { return <div className="empty-state"><p>{text}</p>{action && <button className="ghost-button" type="button" onClick={onClick}>{action}</button>}</div> }
 function CompactTaskRow({ task, toggleTask }) { return <div className={`task-row ${task.completed ? 'completed-task' : ''}`}><button className={`check-button ${task.completed ? 'checked' : ''}`} type="button" onClick={() => toggleTask(task)}>✓</button><span className="task-copy"><strong>{task.title}</strong><small>{task.category}{task.due_time ? ` · ${safeTime(task.due_time)}` : ''}</small></span><span className="xp-pill">+{task.xp_reward} XP</span></div> }
 function DetailedTaskRow({ task, toggleTask, editTask, deleteTask }) { return <article className={`detailed-task-row ${task.completed ? 'completed-task' : ''}`}><button className={`check-button ${task.completed ? 'checked' : ''}`} type="button" onClick={() => toggleTask(task)}>✓</button><div className="task-copy expanded-copy"><strong>{task.title}</strong><small>{task.category} · {STATUS_LABELS[task.status] || 'Pendiente'} · Prioridad {PRIORITY_LABELS[task.priority] || 'Media'}{task.due_date ? ` · ${formatShortDate(task.due_date)}` : ''}{task.due_time ? ` · ${safeTime(task.due_time)}` : ''}</small>{task.description && <p>{task.description}</p>}</div><span className="xp-pill">+{task.xp_reward} XP</span><div className="row-actions"><button className="mini-action" type="button" onClick={() => editTask(task)}>Editar</button><button className="delete-button" type="button" onClick={() => deleteTask(task.id)}>×</button></div></article> }
-function HabitQuickRow({ habit, done, toggleHabit }) { return <button className={`habit-quick-row ${done ? 'done' : ''}`} type="button" onClick={() => toggleHabit(habit)}><span className="habit-check">{done ? '✓' : '○'}</span><span><strong>{habit.title}</strong><small>{habit.target} {habit.unit} · {habit.category}</small></span><b>{done ? `+${habit.xp_reward || 8} XP` : 'Pendiente'}</b></button> }
+function HabitQuickRow({ habit, habitLogs, today, toggleHabit }) { const weekly=habitFrequencyType(habit)==='weekly_target'; const progress=habitWeeklyProgress(habit,habitLogs); const target=habitWeeklyTarget(habit); const done=weekly?progress>=target:habitLogs.some((log)=>log.habit_id===habit.id&&log.log_date===today); return <button className={`habit-quick-row ${done ? 'done' : ''}`} type="button" onClick={() => toggleHabit(habit)}><span className="habit-check">{done ? '✓' : '○'}</span><span><strong>{habit.title}</strong><small>{weekly?`${progress} de ${target} sesiones esta semana`:`${habit.target} ${habit.unit} · ${habit.category}`}</small></span><b>{weekly?'＋ Sesión':done?`+${habit.xp_reward || 8} XP`:'Pendiente'}</b></button> }
 function RoutineQuickCard({ routine, steps, logs, today, toggleRoutineStep, isActionPending }) { const done = steps.filter((step) => logs.some((log) => log.step_id === step.id && log.log_date === today)).length; return <article className="routine-quick-card"><div><strong>{routine.title}</strong><small>{done} de {steps.length} pasos · bonus +{routine.xp_bonus} XP</small></div><div className="routine-mini-steps">{steps.slice(0, 4).map((step) => { const completed = logs.some((log) => log.step_id === step.id && log.log_date === today); const pending = isActionPending(`routine-step:${step.id}:${today}`); return <button className={`${completed ? 'done' : ''} ${pending ? 'is-pending' : ''}`} type="button" disabled={pending} onClick={() => toggleRoutineStep(routine, step)} key={step.id}>{pending ? '…' : completed ? '✓' : '○'}</button> })}</div></article> }
 function RpgCommandCenter({ metrics, seasonMetrics, settings, nextActivity, nowTick }) { const astral = settings.visual_theme === 'astral'; return <article className={`rpg-command-center ${astral ? 'astral-command-center' : ''}`}><img className="rpg-command-art" src={astral ? '/astral/astral-warrior.svg' : '/rpg/adventurer-card.svg'} alt={astral ? 'Ilustración original de Guerrero Astral' : 'Ilustración original de aventurero en un paisaje fantástico'} /><div className="rpg-command-overlay"><div className="rpg-rank-copy"><p className="eyebrow">{astral ? 'SISTEMA DE ENERGÍA ASTRAL' : 'PANEL DEL AVENTURERO'}</p><h2>{seasonMetrics.rank.displayName}</h2><span>Nivel {metrics.level} · {metrics.title}. Cada acción real fortalece tu progreso permanente y tu rango de temporada.</span></div><div className="rpg-rank-core"><img src={astral ? '/astral/astral-crest.svg' : '/rpg/rune-crest.svg'} alt="Emblema de rango" /><div><strong>NIVEL {metrics.level}</strong><small>{metrics.totalXp} XP · {seasonMetrics.points} PT</small></div></div><div className="rpg-rank-stats"><div><span>RACHA</span><strong>{metrics.streak} días</strong></div><div><span>ASCENSO</span><strong>{seasonMetrics.rank.next ? `${seasonMetrics.rank.pointsToNext} PT` : 'MÁXIMO'}</strong></div><div><span>PRÓXIMA MISIÓN</span><strong>{nextActivity ? formatCountdown(nextActivity.date, nowTick) : 'Libre'}</strong></div></div></div></article> }
 function GoalQuickCard({ goal }) { return <article className="goal-quick-card"><div><strong>{goal.title}</strong><small>{goal.category}{goal.due_date ? ` · ${formatShortDate(goal.due_date)}` : ''}</small></div><div className="progress-track"><i style={{ width: `${goal.progress_percent}%` }} /></div><b>{goal.progress_percent}%</b></article> }
