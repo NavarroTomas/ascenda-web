@@ -322,7 +322,10 @@ export default function Dashboard({ session }) {
 
   useEffect(() => {
     document.body.dataset.theme = settings.theme
-    document.body.dataset.mode = settings.experience_mode
+    // El modo de experiencia no debe cambiar la paleta visual.
+    // `data-mode` queda reservado para ajustes de UX como Simple; RPG se maneja desde React.
+    document.body.dataset.mode = settings.experience_mode === 'simple' ? 'simple' : 'standard'
+    document.body.dataset.experienceMode = settings.experience_mode
     document.body.dataset.contrast = settings.high_contrast ? 'high' : 'normal'
     document.body.dataset.colorVision = settings.color_vision_mode
     document.body.dataset.reduceMotion = settings.reduce_motion ? 'true' : 'false'

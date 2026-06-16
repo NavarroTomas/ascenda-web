@@ -7,7 +7,7 @@ import { THEME_PRESETS } from '../data/themePresets.js'
 const MODE_OPTIONS = [
   { id: 'simple', title: 'Simple', description: 'Interfaz directa, tipografía más grande y navegación reducida.', icon: '○' },
   { id: 'standard', title: 'Estándar', description: 'Equilibrio entre organización, estadísticas y gamificación.', icon: '◈' },
-  { id: 'rpg', title: 'RPG', description: 'Experiencia visual intensa con progreso, rangos y celebraciones.', icon: '✦' },
+  { id: 'rpg', title: 'RPG', description: 'Activa progreso, rangos, panel RPG y celebraciones sin cambiar el estilo visual.', icon: '✦' },
 ]
 
 export default function SettingsView({ user, profile, settings, customCategories, onSaveSettings, onSaveProfile, onSaveCategory, onDeleteCategory, onToggleSidebar, onToast }) {
