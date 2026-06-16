@@ -4,7 +4,8 @@ const EXPORT_TABLES = [
   'profiles', 'user_settings', 'custom_categories', 'tasks', 'task_subtasks', 'tags', 'task_tag_links',
   'habits', 'habit_logs', 'routines', 'routine_steps', 'routine_logs', 'routine_step_logs',
   'goals', 'goal_milestones', 'goal_task_links', 'xp_events', 'daily_notes', 'notes', 'events',
-  'reminders', 'notification_history', 'push_subscriptions', 'daily_plans', 'weekly_reviews', 'user_season_progress', 'season_point_events',
+  'reminders', 'notification_history', 'push_subscriptions', 'daily_plans', 'weekly_reviews',
+  'finance_categories', 'finance_transactions', 'finance_monthly_goals', 'user_season_progress', 'season_point_events',
   'user_season_history', 'user_attributes', 'user_missions', 'user_achievements', 'user_cosmetics',
   'user_onboarding', 'user_initial_plans',
 ]
@@ -75,7 +76,7 @@ export async function buildAccountExport(user) {
     if (result.warning) warnings.push(`${result.table}: ${result.warning}`)
   }
   return {
-    export_version: 'ascenda-v9',
+    export_version: 'ascenda-v9.1',
     exported_at: new Date().toISOString(),
     account: {
       id: user.id,

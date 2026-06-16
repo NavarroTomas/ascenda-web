@@ -13,11 +13,11 @@ function buildSlides({ displayName, summary, routines, reminders, events }) {
   const hasRoutineToday = Array.isArray(summary?.dueRoutines) ? summary.dueRoutines.length > 0 : Array.isArray(routines) && routines.length > 0
   const upcomingCount = (Array.isArray(reminders) ? reminders.length : 0) + (Array.isArray(events) ? events.length : 0)
 
-  const slides = [
+  return [
     {
       eyebrow: 'ASCENDA',
       text: `${getGreeting()}, ${name}.`,
-      subtext: 'Antes de entrar, ordenemos tu día.',
+      subtext: 'Antes de entrar, enfoquemos el día.',
     },
     {
       eyebrow: 'Chequeo rápido',
@@ -38,7 +38,7 @@ function buildSlides({ displayName, summary, routines, reminders, events }) {
     pendingHabit
       ? {
           eyebrow: 'Hábito clave',
-          text: `Tu hábito pendiente es: ${pendingHabit}.`,
+          text: `Tu hábito pendiente es ${pendingHabit}.`,
           subtext: 'Marcá una sesión cuando lo completes.',
         }
       : {
@@ -75,8 +75,36 @@ function buildSlides({ displayName, summary, routines, reminders, events }) {
       final: true,
     },
   ]
+}
 
-  return slides
+function AnimatedWords({ text }) {
+  let letterIndex = 0
+  const words = String(text || '').split(/(\s+)/)
+
+  return words.map((word, wordIndex) => {
+    if (/^\s+$/.test(word)) {
+      return <span className="daily-welcome-gap" aria-hidden="true" key={`gap-${wordIndex}`}> </span>
+    }
+
+    return (
+      <span className="daily-welcome-word" key={`${word}-${wordIndex}`}>
+        {word.split('').map((letter) => {
+          const currentIndex = letterIndex
+          letterIndex += 1
+          return (
+            <span
+              className="daily-welcome-letter"
+              style={{ '--letter-delay': `${currentIndex * 0.032}s` }}
+              aria-hidden="true"
+              key={`${letter}-${currentIndex}`}
+            >
+              {letter}
+            </span>
+          )
+        })}
+      </span>
+    )
+  })
 }
 
 export default function DailyWelcomeModal({
@@ -117,7 +145,7 @@ export default function DailyWelcomeModal({
     if (reducedMotion) return undefined
 
     const textLength = current?.text?.length || 20
-    const duration = Math.min(Math.max(textLength * 44 + 1650, 2600), 5200)
+    const duration = Math.min(Math.max(textLength * 38 + 1350, 2300), 4550)
 
     if (current?.final) return undefined
 
@@ -152,16 +180,7 @@ export default function DailyWelcomeModal({
         <div className="daily-welcome-stage" key={`${step}-${current.text}`}>
           <p className="daily-welcome-eyebrow">{current.eyebrow}</p>
           <h1 className="daily-welcome-typeline" aria-label={current.text}>
-            {current.text.split('').map((letter, index) => (
-              <span
-                className={letter === ' ' ? 'space' : undefined}
-                style={{ '--letter-delay': `${index * 0.035}s` }}
-                aria-hidden="true"
-                key={`${letter}-${index}`}
-              >
-                {letter === ' ' ? '\u00A0' : letter}
-              </span>
-            ))}
+            <AnimatedWords text={current.text} />
           </h1>
           <p className="daily-welcome-subtext">{current.subtext}</p>
         </div>

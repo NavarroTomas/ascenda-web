@@ -1,0 +1,13 @@
+package.json
+src/components/DailyWelcomeModal.jsx
+src/components/Dashboard.jsx
+src/components/FinanceView.jsx
+src/components/SettingsView.jsx
+src/data/themePresets.js
+src/lib/accountManagement.js
+src/lib/finance.js
+src/styles.css
+supabase/migrations/V9_1_FOCUS_AND_FINANCE.sql
+V9_1_INSTALACION.md
+ARCHIVOS_INCLUIDOS_V9_1.txt
+V9_1_VALIDACION.md

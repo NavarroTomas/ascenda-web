@@ -36,6 +36,7 @@ import DayPlannerPanel from './DayPlannerPanel.jsx'
 import WeeklyReviewPanel from './WeeklyReviewPanel.jsx'
 import QuickTemplatesPanel from './QuickTemplatesPanel.jsx'
 import ProgressDashboard from './ProgressDashboard.jsx'
+import FinanceView from './FinanceView.jsx'
 
 const NAV_ITEMS = [
   { id: 'inicio', label: 'Inicio', icon: '⌂' },
@@ -49,10 +50,11 @@ const NAV_ITEMS = [
   { id: 'temporada', label: 'Temporada', icon: '♜' },
   { id: 'perfil', label: 'Perfil', icon: '◎' },
   { id: 'progreso', label: 'Progreso', icon: '↗' },
+  { id: 'finanzas', label: 'Finanzas', icon: '₱' },
   { id: 'configuracion', label: 'Configuración', icon: '⚙' },
 ]
 
-const SIMPLE_NAV_IDS = new Set(['inicio', 'agenda', 'recordatorios', 'tareas', 'habitos', 'perfil', 'configuracion'])
+const SIMPLE_NAV_IDS = new Set(['inicio', 'agenda', 'recordatorios', 'tareas', 'habitos', 'finanzas', 'perfil', 'configuracion'])
 const DEFAULT_SETTINGS = {
   experience_mode: 'standard', theme: 'dark', visual_theme: 'standard', reduce_motion: false, high_contrast: false,
   color_vision_mode: 'default', penalties_enabled: true, custom_quote: null, sidebar_collapsed: false,
@@ -189,6 +191,9 @@ export default function Dashboard({ session }) {
   const [seasonHistory, setSeasonHistory] = useState([])
   const [dailyPlans, setDailyPlans] = useState([])
   const [weeklyReviews, setWeeklyReviews] = useState([])
+  const [financeTransactions, setFinanceTransactions] = useState([])
+  const [financeCategories, setFinanceCategories] = useState([])
+  const [financeMonthlyGoals, setFinanceMonthlyGoals] = useState([])
   const [dailyWelcomeOpen, setDailyWelcomeOpen] = useState(false)
   const [loading, setLoading] = useState(true)
   const [databaseIssue, setDatabaseIssue] = useState('')
@@ -264,12 +269,15 @@ export default function Dashboard({ session }) {
       supabase.from('user_season_history').select('*').order('created_at', { ascending: false }),
       supabase.from('daily_plans').select('*').order('plan_date', { ascending: false }).limit(30),
       supabase.from('weekly_reviews').select('*').order('week_start', { ascending: false }).limit(16),
+      supabase.from('finance_transactions').select('*').order('transaction_date', { ascending: false }).limit(300),
+      supabase.from('finance_categories').select('*').order('name'),
+      supabase.from('finance_monthly_goals').select('*').order('month_start', { ascending: false }).limit(24),
     ])
 
     const firstError = results.find((result) => result.error)?.error
     if (firstError) {
       setDatabaseIssue(formatError(firstError))
-      showToast('La base de datos necesita la migración V5.')
+      showToast('La base de datos necesita migraciones pendientes.')
     }
 
     setProfile(results[0].data || { id: user.id, display_name: user.user_metadata?.display_name || 'Usuario' })
@@ -304,6 +312,9 @@ export default function Dashboard({ session }) {
     setSeasonHistory(results[23].data || [])
     setDailyPlans(results[24]?.data || [])
     setWeeklyReviews(results[25]?.data || [])
+    setFinanceTransactions(results[26]?.data || [])
+    setFinanceCategories(results[27]?.data || [])
+    setFinanceMonthlyGoals(results[28]?.data || [])
     setLoading(false)
   }, [showToast, user.id, user.user_metadata?.display_name])
 
@@ -919,6 +930,52 @@ export default function Dashboard({ session }) {
     return true
   }
 
+  async function saveFinanceTransaction(payload, existingTransaction) {
+    const query = existingTransaction?.id
+      ? supabase.from('finance_transactions').update(payload).eq('id', existingTransaction.id)
+      : supabase.from('finance_transactions').insert({ ...payload, user_id: user.id })
+    const { data, error } = await query.select().single()
+    if (error) { showToast(`No se pudo guardar el movimiento: ${formatError(error)}`); return false }
+    setFinanceTransactions((current) => existingTransaction?.id ? current.map((item) => item.id === data.id ? data : item) : [data, ...current])
+    showToast(existingTransaction ? 'Movimiento actualizado.' : 'Movimiento registrado.')
+    return true
+  }
+
+  async function deleteFinanceTransaction(transactionId) {
+    if (!window.confirm('¿Eliminar este movimiento financiero? Esta acción no se puede deshacer.')) return
+    const { error } = await supabase.from('finance_transactions').delete().eq('id', transactionId)
+    if (error) { showToast(`No se pudo eliminar el movimiento: ${formatError(error)}`); return }
+    setFinanceTransactions((current) => current.filter((item) => item.id !== transactionId))
+    showToast('Movimiento eliminado.')
+  }
+
+  async function saveFinanceCategory(payload) {
+    const { data, error } = await supabase.from('finance_categories').insert({ ...payload, user_id: user.id }).select().single()
+    if (error) { showToast(`No se pudo crear la categoría financiera: ${formatError(error)}`); return false }
+    setFinanceCategories((current) => [...current, data].sort((a, b) => a.name.localeCompare(b.name)))
+    showToast('Categoría financiera creada.')
+    return true
+  }
+
+  async function deleteFinanceCategory(categoryId) {
+    if (!window.confirm('¿Eliminar esta categoría financiera? Los movimientos conservarán el nombre cargado.')) return
+    const { error } = await supabase.from('finance_categories').delete().eq('id', categoryId)
+    if (error) { showToast(`No se pudo eliminar la categoría financiera: ${formatError(error)}`); return }
+    setFinanceCategories((current) => current.filter((item) => item.id !== categoryId))
+    showToast('Categoría financiera eliminada.')
+  }
+
+  async function saveFinanceMonthlyGoal(payload, existingGoal) {
+    const query = existingGoal?.id
+      ? supabase.from('finance_monthly_goals').update(payload).eq('id', existingGoal.id)
+      : supabase.from('finance_monthly_goals').insert({ ...payload, user_id: user.id })
+    const { data, error } = await query.select().single()
+    if (error) { showToast(`No se pudo guardar el objetivo financiero: ${formatError(error)}`); return false }
+    setFinanceMonthlyGoals((current) => existingGoal?.id ? current.map((item) => item.id === data.id ? data : item) : [data, ...current])
+    showToast('Objetivo financiero guardado.')
+    return true
+  }
+
   async function applyQuickTemplate(template) {
     const payload = { ...template.payload }
     if (template.type === 'task') {
@@ -1020,11 +1077,11 @@ export default function Dashboard({ session }) {
     return () => clearInterval(timer)
   }, [loading, reminders, activeReminder, settings])
 
-  if (loading) return <main className="centered-screen"><p className="eyebrow">SINCRONIZANDO ASCENDA V8.2…</p></main>
+  if (loading) return <main className="centered-screen"><p className="eyebrow">SINCRONIZANDO ASCENDA V9.1…</p></main>
 
   const currentRoutine = routineModal.routine
   const currentGoal = goalModal.goal
-  const mainProps = { userId: user.id, displayName, tasks, taskSubtasks, tags, taskTagLinks, events, reminders, dailyNotes, notes, notificationHistory, habits, habitLogs, routines, routineSteps, routineLogs, routineStepLogs, goals, milestones, xpEvents, metrics, today, recentDays, categories, settings, activeSeason, seasonMetrics, seasonHistory, dailyPlans, weeklyReviews }
+  const mainProps = { userId: user.id, displayName, tasks, taskSubtasks, tags, taskTagLinks, events, reminders, dailyNotes, notes, notificationHistory, habits, habitLogs, routines, routineSteps, routineLogs, routineStepLogs, goals, milestones, xpEvents, metrics, today, recentDays, categories, settings, activeSeason, seasonMetrics, seasonHistory, dailyPlans, weeklyReviews, financeTransactions, financeCategories, financeMonthlyGoals }
 
   return <main className={`app-shell ${settings.sidebar_collapsed ? 'sidebar-collapsed' : ''}`}>
     <aside className="sidebar panel">
@@ -1040,7 +1097,7 @@ export default function Dashboard({ session }) {
 
     <section className="main-area">
       <header className="topbar"><div><p className="eyebrow">{getTodayLabel().toUpperCase()}</p><h1>{getGreeting()}, {displayName}</h1></div><div className="topbar-actions"><span className="season-pill">♜ {seasonMetrics.rank.displayName}</span><span className="streak-pill">✦ {metrics.streak} días · +{metrics.streakBonus}% XP</span><button className="primary-button" type="button" onClick={() => setQuickCreateOpen(true)}>＋ Crear</button></div></header>
-      {databaseIssue && <div className="database-alert"><strong>Ejecutá las migraciones pendientes: V8.1, V8.2 y `supabase/migrations/V9_DAILY_PLANNING_AND_PROGRESS.sql`.</strong><span>{databaseIssue}</span></div>}
+      {databaseIssue && <div className="database-alert"><strong>Ejecutá las migraciones pendientes: V8.1, V8.2, V9 y `supabase/migrations/V9_1_FOCUS_AND_FINANCE.sql`.</strong><span>{databaseIssue}</span></div>}
       {activeSection === 'inicio' && <HomeView {...mainProps} nextActivity={nextActivity} nowTick={nowTick} navigate={navigate} openCreate={openCreate} toggleTask={toggleTask} toggleHabit={toggleHabit} toggleRoutineStep={toggleRoutineStep} isActionPending={isActionPending} onSaveDailyPlan={saveDailyPlan} onSaveWeeklyReview={saveWeeklyReview} onApplyQuickTemplate={applyQuickTemplate} />}
       {activeSection === 'agenda' && <AgendaWorkspace {...mainProps} selectedDate={today} onSaveDailyNote={saveDailyNote} onDeleteDailyNote={deleteDailyNote} onOpenEvent={(event, defaultDate) => setEventModal({ open:true, event, defaultDate })} onDeleteEvent={deleteEvent} onCreateTaskFromText={createTaskFromText} onCreateReminderFromText={createReminderFromText} />}
       {activeSection === 'notas' && <NotesView {...mainProps} onOpenNote={(note) => setNoteModal({open:true,note})} onDeleteNote={deleteNote} />}
@@ -1052,6 +1109,7 @@ export default function Dashboard({ session }) {
       {activeSection === 'temporada' && <SeasonView activeSeason={activeSeason} seasonMetrics={seasonMetrics} seasonHistory={seasonHistory} settings={settings} />}
       {activeSection === 'perfil' && <ProfileView session={session} settings={settings} onProfileChanged={setProfile} />}
       {activeSection === 'progreso' && <ProgressDashboard {...mainProps} />}
+      {activeSection === 'finanzas' && <FinanceView {...mainProps} onSaveFinanceTransaction={saveFinanceTransaction} onDeleteFinanceTransaction={deleteFinanceTransaction} onSaveFinanceCategory={saveFinanceCategory} onDeleteFinanceCategory={deleteFinanceCategory} onSaveFinanceMonthlyGoal={saveFinanceMonthlyGoal} />}
       {activeSection === 'configuracion' && <SettingsView user={user} profile={profile} settings={settings} customCategories={customCategories} onSaveSettings={saveSettings} onSaveProfile={saveProfile} onSaveCategory={saveCategory} onDeleteCategory={deleteCategory} onToggleSidebar={toggleSidebar} onToast={showToast} />}
     </section>
 

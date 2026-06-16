@@ -17,6 +17,13 @@ export const THEME_PRESETS = [
     description: 'Energía de combate, auras celestes y ascensos de poder originales.',
     icon: '☄',
   },
+  {
+    id: 'focus',
+    title: 'MODO FOCUS',
+    description: 'Negro, disciplina, gimnasio, soledad y avance personal sin distracciones.',
+    icon: '◼',
+    featured: true,
+  },
 ]
 
 export function getThemePreset(id = 'standard') {

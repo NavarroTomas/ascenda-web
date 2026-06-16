@@ -64,7 +64,7 @@ export default function SettingsView({ user, profile, settings, customCategories
 
       <article className="content-panel panel settings-panel full-width">
         <div className="card-heading"><div><p className="eyebrow">PERSONALIZACIÓN VISUAL</p><h3>Estilo del sistema</h3><p>Los estilos son universos visuales originales. Guerrero Astral queda disponible gratuitamente.</p></div></div>
-        <div className="theme-selector">{THEME_PRESETS.map((theme) => <button className={form.visual_theme === theme.id ? 'selected' : ''} type="button" onClick={() => update('visual_theme', theme.id)} key={theme.id}><span>{theme.icon}</span><div><strong>{theme.title}</strong><small>{theme.description}</small></div></button>)}</div>
+        <div className="theme-selector">{THEME_PRESETS.map((theme) => <button className={`${form.visual_theme === theme.id ? 'selected' : ''} ${theme.featured ? 'focus-theme-option' : ''}`} type="button" onClick={() => update('visual_theme', theme.id)} key={theme.id}><span>{theme.icon}</span><div><strong>{theme.title}</strong><small>{theme.description}</small>{theme.id === 'focus' && <em>ACTIVAR DISCIPLINA</em>}</div></button>)}</div>
       </article>
 
       <article className="content-panel panel settings-panel">
