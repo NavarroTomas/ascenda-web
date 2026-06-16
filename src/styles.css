@@ -637,3 +637,230 @@ body[data-visual-theme="medieval"] .nav-item.active { border-color: rgba(82, 226
 .security-panel{gap:14px}.security-password-form{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;gap:9px;align-items:end}.account-action-grid{display:flex;gap:9px;flex-wrap:wrap}.danger-zone{border-color:rgba(255,122,131,.32);background:linear-gradient(145deg,rgba(255,122,131,.065),var(--panel))}.danger-zone .card-heading{align-items:center;margin-bottom:0}.danger-copy{color:var(--danger)!important}.danger-button{border:1px solid rgba(255,122,131,.48);border-radius:10px;padding:9px 12px;color:#fff;background:rgba(191,55,66,.82);font-size:.72rem;font-weight:900;cursor:pointer;transition:transform 140ms ease,background 140ms ease}.danger-button:hover{background:rgba(215,64,77,.96);transform:translateY(-1px)}.danger-button:disabled{cursor:not-allowed;opacity:.5;transform:none}.danger-modal{border-color:rgba(255,122,131,.45)}
 .habit-day-selector{display:grid;gap:7px}.habit-day-selector>span{color:var(--muted);font-size:.68rem;font-weight:800}.habit-day-selector>div{display:flex;gap:6px;flex-wrap:wrap}.habit-day-selector button{width:33px;height:33px;border:1px solid var(--border);border-radius:9px;color:var(--muted);background:var(--bg-soft);cursor:pointer}.habit-day-selector button.selected{border-color:var(--border-bright);color:#06201d;background:var(--accent);font-weight:900}.weekly-habit-progress{display:grid;gap:7px}.weekly-habit-progress small{color:var(--muted);font-size:.67rem}
 @media(max-width:920px){.security-password-form{grid-template-columns:1fr 1fr}.security-password-form .primary-button{grid-column:1/-1}}@media(max-width:620px){.security-password-form{grid-template-columns:1fr}.security-password-form .primary-button{grid-column:auto}.danger-zone .card-heading{align-items:stretch;flex-direction:column}.danger-zone .danger-button,.account-action-grid button{width:100%}}
+
+/* =============================================================================
+   ASCENDA V9 · Bienvenida diaria, planificación y progreso
+   ============================================================================= */
+.daily-welcome-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  background: radial-gradient(circle at 20% 20%, rgba(56, 217, 198, 0.18), transparent 30%), radial-gradient(circle at 80% 80%, rgba(151, 117, 250, 0.16), transparent 34%), rgba(4, 7, 12, 0.96);
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+.daily-welcome-screen {
+  width: min(980px, 100%);
+  min-height: min(680px, calc(100vh - 48px));
+  position: relative;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 36px;
+  overflow: hidden;
+  background: linear-gradient(145deg, rgba(10, 16, 28, 0.94), rgba(5, 8, 14, 0.98));
+  box-shadow: 0 32px 120px rgba(0, 0, 0, 0.42);
+}
+.daily-welcome-screen::before {
+  content: '';
+  position: absolute;
+  inset: -20%;
+  background: linear-gradient(90deg, transparent, rgba(56, 217, 198, 0.1), transparent);
+  animation: welcomeSweep 5s ease-in-out infinite;
+}
+.daily-welcome-skip {
+  position: absolute;
+  top: 22px;
+  right: 22px;
+  z-index: 2;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  border-radius: 999px;
+  padding: 10px 16px;
+  cursor: pointer;
+}
+.daily-welcome-copy {
+  position: relative;
+  z-index: 1;
+  width: min(760px, 100%);
+  text-align: center;
+  padding: 52px 24px;
+}
+.daily-welcome-line {
+  opacity: 0;
+  transform: translateY(18px);
+  font-size: clamp(1.45rem, 4vw, 3.8rem);
+  line-height: 1.05;
+  margin: 12px 0;
+  letter-spacing: -0.06em;
+  animation: welcomeTextIn 0.9s ease forwards;
+  animation-delay: var(--delay);
+}
+.daily-welcome-copy .primary-button {
+  margin-top: 32px;
+  opacity: 0;
+  animation: welcomeTextIn 0.9s ease forwards;
+  animation-delay: 3.2s;
+}
+.daily-welcome-screen.reduced-motion::before,
+.daily-welcome-screen.reduced-motion .daily-welcome-line,
+.daily-welcome-screen.reduced-motion .primary-button {
+  animation: none;
+  opacity: 1;
+  transform: none;
+}
+@keyframes welcomeTextIn {
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes welcomeSweep {
+  0%, 100% { transform: translateX(-20%) rotate(8deg); opacity: 0.5; }
+  50% { transform: translateX(20%) rotate(8deg); opacity: 0.95; }
+}
+.daily-command-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 28px;
+  background: linear-gradient(135deg, rgba(56, 217, 198, 0.12), rgba(151, 117, 250, 0.08)), var(--panel-bg);
+}
+.daily-command-panel h1 {
+  font-size: clamp(2rem, 5vw, 4.8rem);
+  letter-spacing: -0.08em;
+  margin: 0 0 10px;
+}
+.daily-command-panel p {
+  max-width: 760px;
+  color: var(--text-muted);
+}
+.daily-command-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.day-planner-panel,
+.weekly-review-panel,
+.quick-templates-panel {
+  min-height: 100%;
+}
+.planner-editor,
+.review-form {
+  display: grid;
+  gap: 14px;
+}
+.planner-block-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+.planner-preview {
+  display: grid;
+  gap: 18px;
+}
+.planner-focus {
+  display: grid;
+  gap: 4px;
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.planner-focus span,
+.planner-preview-block span,
+.template-card span,
+.weekly-summary-strip small {
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.72rem;
+}
+.planner-preview-block {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.04);
+}
+.planner-preview-block p {
+  margin: 0;
+}
+.weekly-summary-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0;
+}
+.weekly-summary-strip span {
+  display: grid;
+  gap: 2px;
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.weekly-summary-strip strong {
+  font-size: 1.45rem;
+}
+.review-readonly {
+  display: grid;
+  gap: 8px;
+}
+.review-readonly p {
+  margin: 0;
+  color: var(--text-muted);
+}
+.template-group-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 16px;
+}
+.template-group {
+  display: grid;
+  gap: 10px;
+}
+.template-group h3 {
+  margin: 0;
+}
+.template-card {
+  width: 100%;
+  text-align: left;
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.045);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+.template-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(56, 217, 198, 0.42);
+  background: rgba(56, 217, 198, 0.08);
+}
+.template-card small {
+  color: var(--text-muted);
+}
+@media (max-width: 900px) {
+  .daily-command-panel,
+  .daily-command-actions {
+    align-items: flex-start;
+    justify-content: flex-start;
+  }
+  .daily-command-panel {
+    flex-direction: column;
+  }
+  .planner-block-grid,
+  .weekly-summary-strip {
+    grid-template-columns: 1fr;
+  }
+  .daily-welcome-screen {
+    min-height: calc(100vh - 24px);
+    border-radius: 24px;
+  }
+}

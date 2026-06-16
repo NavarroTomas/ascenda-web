@@ -38,13 +38,26 @@ export function calculateProjectedStreak(dateValues = [], today = getTodayISO())
   return calculateStreak([...dateValues, today], today)
 }
 
+export const XP_REWARDS = {
+  task: { baja: 10, media: 16, alta: 26 },
+  taskDueDateBonus: 3,
+  taskDescriptionBonus: 2,
+  taskBlockedBonus: 2,
+  subtaskBonus: 3,
+  subtaskCap: 18,
+  dailyPlan: 10,
+  weeklyReview: 40,
+  weeklyHabitGoal: 60,
+  routineCompletion: 30,
+  bigGoalCompletion: 150,
+}
+
 export function calculateTaskXp({ priority = 'media', due_date: dueDate, description = '', status = 'pendiente', subtasks = [] }) {
-  const baseByPriority = { baja: 10, media: 16, alta: 26 }
-  let amount = baseByPriority[priority] || 16
-  if (dueDate) amount += 3
-  if (description?.trim()) amount += 2
-  if (status === 'bloqueada') amount += 2
-  amount += Math.min(18, (subtasks || []).filter((item) => item.title?.trim()).length * 3)
+  let amount = XP_REWARDS.task[priority] || XP_REWARDS.task.media
+  if (dueDate) amount += XP_REWARDS.taskDueDateBonus
+  if (description?.trim()) amount += XP_REWARDS.taskDescriptionBonus
+  if (status === 'bloqueada') amount += XP_REWARDS.taskBlockedBonus
+  amount += Math.min(XP_REWARDS.subtaskCap, (subtasks || []).filter((item) => item.title?.trim()).length * XP_REWARDS.subtaskBonus)
   return amount
 }
 

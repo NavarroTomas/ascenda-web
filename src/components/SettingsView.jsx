@@ -34,6 +34,8 @@ export default function SettingsView({ user, profile, settings, customCategories
         penalties_enabled: Boolean(form.penalties_enabled),
         custom_quote: form.custom_quote?.trim() || null,
         sidebar_collapsed: Boolean(form.sidebar_collapsed),
+        daily_welcome_enabled: Boolean(form.daily_welcome_enabled),
+        weekly_review_enabled: Boolean(form.weekly_review_enabled),
       }),
     ])
     setSaving(false)
@@ -71,6 +73,8 @@ export default function SettingsView({ user, profile, settings, customCategories
           <label className="setting-row"><span><strong>Sonidos de recompensa</strong><small>Reproduce tonos originales al completar acciones, subir de nivel o ascender de rango.</small></span><input type="checkbox" checked={form.sounds_enabled} onChange={(event) => update('sounds_enabled', event.target.checked)} /></label>
           <label className="setting-row"><span><strong>Efectos intensos</strong><small>Activa celebraciones ampliadas y partículas temporales en los estilos RPG.</small></span><input type="checkbox" checked={form.intense_effects_enabled} onChange={(event) => update('intense_effects_enabled', event.target.checked)} /></label>
           <label className="setting-row"><span><strong>Reducir animaciones</strong><small>Desactiva transiciones y movimientos decorativos.</small></span><input type="checkbox" checked={form.reduce_motion} onChange={(event) => update('reduce_motion', event.target.checked)} /></label>
+          <label className="setting-row"><span><strong>Bienvenida diaria</strong><small>Muestra una pantalla animada una vez por día al abrir Ascenda.</small></span><input type="checkbox" checked={form.daily_welcome_enabled !== false} onChange={(event) => update('daily_welcome_enabled', event.target.checked)} /></label>
+          <label className="setting-row"><span><strong>Revisión semanal</strong><small>Activa el bloque guiado para cerrar la semana y guardar aprendizajes.</small></span><input type="checkbox" checked={form.weekly_review_enabled !== false} onChange={(event) => update('weekly_review_enabled', event.target.checked)} /></label>
         </div>
       </article>
 
