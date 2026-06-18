@@ -37,6 +37,17 @@ import WeeklyReviewPanel from './WeeklyReviewPanel.jsx'
 import QuickTemplatesPanel from './QuickTemplatesPanel.jsx'
 import ProgressDashboard from './ProgressDashboard.jsx'
 import FinanceView from './FinanceView.jsx'
+import SimpleHomeView from './SimpleHomeView.jsx'
+import UpdateNewsModal from './UpdateNewsModal.jsx'
+import TourModal from './TourModal.jsx'
+import QuickRemindersPanel from './QuickRemindersPanel.jsx'
+import FocusDashboardPanel from './FocusDashboardPanel.jsx'
+import NightReviewPanel from './NightReviewPanel.jsx'
+import AutomaticPriorityPanel from './AutomaticPriorityPanel.jsx'
+import NotificationCenterView from './NotificationCenterView.jsx'
+import { getFinanceMonthSummary, getMonthStartISO } from '../lib/finance.js'
+import { ASCENDA_APP_VERSION } from '../data/updateNotes.js'
+import { buildInternalNotifications, buildPriorityAlerts, getDailyTourSeenKey, getUpdateSeenKey } from '../lib/v10Assistance.js'
 
 const NAV_ITEMS = [
   { id: 'inicio', label: 'Inicio', icon: '⌂' },
@@ -51,14 +62,16 @@ const NAV_ITEMS = [
   { id: 'perfil', label: 'Perfil', icon: '◎' },
   { id: 'progreso', label: 'Progreso', icon: '↗' },
   { id: 'finanzas', label: 'Finanzas', icon: '₱' },
+  { id: 'avisos', label: 'Avisos', icon: '◌' },
   { id: 'configuracion', label: 'Configuración', icon: '⚙' },
 ]
 
-const SIMPLE_NAV_IDS = new Set(['inicio', 'agenda', 'recordatorios', 'tareas', 'habitos', 'finanzas', 'perfil', 'configuracion'])
+const SIMPLE_NAV_IDS = new Set(['inicio', 'recordatorios', 'tareas', 'habitos', 'finanzas', 'avisos', 'perfil', 'configuracion'])
 const DEFAULT_SETTINGS = {
   experience_mode: 'standard', theme: 'dark', visual_theme: 'standard', reduce_motion: false, high_contrast: false,
   color_vision_mode: 'default', penalties_enabled: true, custom_quote: null, sidebar_collapsed: false,
   sounds_enabled: true, intense_effects_enabled: true, daily_welcome_enabled: true, weekly_review_enabled: true,
+  assisted_mode_enabled: false, updates_modal_enabled: true, night_review_enabled: true, priority_assist_enabled: true,
 }
 const PRIORITY_LABELS = { baja: 'Baja', media: 'Media', alta: 'Alta' }
 const STATUS_LABELS = {
@@ -194,7 +207,14 @@ export default function Dashboard({ session }) {
   const [financeTransactions, setFinanceTransactions] = useState([])
   const [financeCategories, setFinanceCategories] = useState([])
   const [financeMonthlyGoals, setFinanceMonthlyGoals] = useState([])
+  const [focusSessions, setFocusSessions] = useState([])
+  const [dailyReflections, setDailyReflections] = useState([])
+  const [nonNegotiables, setNonNegotiables] = useState([])
+  const [internalNotifications, setInternalNotifications] = useState([])
   const [dailyWelcomeOpen, setDailyWelcomeOpen] = useState(false)
+  const [updateNewsOpen, setUpdateNewsOpen] = useState(false)
+  const [tourOpen, setTourOpen] = useState(false)
+  const [tourStep, setTourStep] = useState(0)
   const [loading, setLoading] = useState(true)
   const [databaseIssue, setDatabaseIssue] = useState('')
   const [toast, setToast] = useState('')
@@ -272,6 +292,10 @@ export default function Dashboard({ session }) {
       supabase.from('finance_transactions').select('*').order('transaction_date', { ascending: false }).limit(300),
       supabase.from('finance_categories').select('*').order('name'),
       supabase.from('finance_monthly_goals').select('*').order('month_start', { ascending: false }).limit(24),
+      supabase.from('focus_sessions').select('*').order('started_at', { ascending: false }).limit(120),
+      supabase.from('daily_reflections').select('*').order('review_date', { ascending: false }).limit(30),
+      supabase.from('non_negotiables').select('*').order('created_at', { ascending: false }),
+      supabase.from('internal_notifications').select('*').order('created_at', { ascending: false }).limit(80),
     ])
 
     const firstError = results.find((result) => result.error)?.error
@@ -315,6 +339,10 @@ export default function Dashboard({ session }) {
     setFinanceTransactions(results[26]?.data || [])
     setFinanceCategories(results[27]?.data || [])
     setFinanceMonthlyGoals(results[28]?.data || [])
+    setFocusSessions(results[29]?.data || [])
+    setDailyReflections(results[30]?.data || [])
+    setNonNegotiables(results[31]?.data || [])
+    setInternalNotifications(results[32]?.data || [])
     setLoading(false)
   }, [showToast, user.id, user.user_metadata?.display_name])
 
@@ -330,6 +358,7 @@ export default function Dashboard({ session }) {
     document.body.dataset.colorVision = settings.color_vision_mode
     document.body.dataset.reduceMotion = settings.reduce_motion ? 'true' : 'false'
     document.body.dataset.visualTheme = settings.visual_theme || 'standard'
+    document.body.dataset.assistedMode = settings.assisted_mode_enabled ? 'true' : 'false'
     document.body.dataset.intenseEffects = settings.intense_effects_enabled ? 'true' : 'false'
   }, [settings])
 
@@ -364,6 +393,28 @@ export default function Dashboard({ session }) {
   function closeDailyWelcome() {
     localStorage.setItem(`ascenda:daily-welcome:${user.id}:${today}`, 'seen')
     setDailyWelcomeOpen(false)
+  }
+
+  useEffect(() => {
+    if (loading || settings.updates_modal_enabled === false) return
+    const key = getUpdateSeenKey(user.id)
+    if (localStorage.getItem(key) !== 'seen') setUpdateNewsOpen(true)
+  }, [loading, settings.updates_modal_enabled, user.id])
+
+  useEffect(() => {
+    if (loading) return
+    const key = getDailyTourSeenKey(user.id)
+    if (localStorage.getItem(key) !== 'seen') setTourOpen(true)
+  }, [loading, user.id])
+
+  function closeUpdateNews() {
+    localStorage.setItem(getUpdateSeenKey(user.id), 'seen')
+    setUpdateNewsOpen(false)
+  }
+
+  function closeTour() {
+    localStorage.setItem(getDailyTourSeenKey(user.id), 'seen')
+    setTourOpen(false)
   }
 
   const metrics = useMemo(() => {
@@ -420,6 +471,16 @@ export default function Dashboard({ session }) {
     reminders.filter((reminder) => reminder.status === 'active').forEach((reminder) => options.push({ type: 'Recordatorio', title: reminder.title, date: new Date(reminder.next_trigger_at), subtitle: reminder.priority === 'alarm' ? 'Alarma' : 'Aviso programado' }))
     return options.filter((item) => item.date && item.date >= now).sort((a, b) => a.date - b.date)[0] || null
   }, [tasks, routines, goals, habits, habitLogs, events, reminders, today, nowTick])
+
+  const financeSummary = useMemo(() => {
+    const monthStart = getMonthStartISO(new Date(`${today}T00:00:00`))
+    const currentGoal = financeMonthlyGoals.find((goal) => goal.month_start === monthStart) || null
+    return getFinanceMonthSummary({ transactions: financeTransactions, monthlyGoal: currentGoal, monthStart })
+  }, [financeTransactions, financeMonthlyGoals, today])
+
+  const priorityAlerts = useMemo(() => buildPriorityAlerts({ tasks, habits, habitLogs, reminders, financeSummary, today }), [tasks, habits, habitLogs, reminders, financeSummary, today])
+  const visiblePriorityAlerts = settings.priority_assist_enabled === false ? [] : priorityAlerts
+  const allInternalNotifications = useMemo(() => buildInternalNotifications({ priorityAlerts: visiblePriorityAlerts, notificationHistory, internalNotifications }), [visiblePriorityAlerts, notificationHistory, internalNotifications])
 
   function navigate(section) { window.location.hash = `/${section}` }
   function openCreate(type) {
@@ -979,6 +1040,69 @@ export default function Dashboard({ session }) {
     return true
   }
 
+
+  async function createQuickReminder(minutes, label = 'Recordatorio rápido') {
+    const next = new Date()
+    next.setMinutes(next.getMinutes() + Number(minutes || 10))
+    const { data, error } = await supabase.from('reminders').insert({
+      user_id: user.id,
+      title: `Recordatorio rápido · ${label}`,
+      description: 'Creado desde Modo Asistido.',
+      source_type: 'standalone',
+      next_trigger_at: next.toISOString(),
+      recurrence_type: 'none',
+      recurrence_interval: 1,
+      priority: 'normal',
+      sound_enabled: true,
+      enabled: true,
+      status: 'active',
+    }).select().single()
+    if (error) { showToast(`No se pudo crear el recordatorio rápido: ${formatError(error)}`); return false }
+    setReminders((current) => [...current, data])
+    showToast('Listo, te lo voy a recordar.')
+    setQuickCreateOpen(false)
+    return true
+  }
+
+  async function saveFocusSession(payload) {
+    const { data, error } = await supabase.from('focus_sessions').insert({ ...payload, user_id: user.id }).select().single()
+    if (error) { showToast(`No se pudo guardar el bloque Focus: ${formatError(error)}`); return false }
+    setFocusSessions((current) => [data, ...current])
+    await awardXp({ sourceType: 'focus_session', sourceKey: data.id, reason: `Bloque Focus: ${data.title}`, baseAmount: Math.max(5, Math.min(60, Number(data.duration_minutes || 0))) })
+    showToast('Bloque Focus guardado.')
+    return true
+  }
+
+  async function saveDailyReflection(payload, existingReview) {
+    const query = existingReview?.id ? supabase.from('daily_reflections').update(payload).eq('id', existingReview.id) : supabase.from('daily_reflections').insert({ ...payload, user_id: user.id })
+    const { data, error } = await query.select().single()
+    if (error) { showToast(`No se pudo guardar el cierre del día: ${formatError(error)}`); return false }
+    setDailyReflections((current) => existingReview?.id ? current.map((item) => item.id === data.id ? data : item) : [data, ...current])
+    showToast('Cierre del día guardado.')
+    return true
+  }
+
+  async function saveNonNegotiable(payload) {
+    const { data, error } = await supabase.from('non_negotiables').insert({ ...payload, user_id: user.id }).select().single()
+    if (error) { showToast(`No se pudo guardar el no negociable: ${formatError(error)}`); return false }
+    setNonNegotiables((current) => [data, ...current])
+    showToast('No negociable agregado.')
+    return true
+  }
+
+  async function deleteNonNegotiable(id) {
+    const { error } = await supabase.from('non_negotiables').delete().eq('id', id)
+    if (error) { showToast(`No se pudo eliminar: ${formatError(error)}`); return }
+    setNonNegotiables((current) => current.filter((item) => item.id !== id))
+    showToast('Listo, se eliminó correctamente.')
+  }
+
+  async function markInternalNotificationRead(item) {
+    const { data, error } = await supabase.from('internal_notifications').update({ read_at: new Date().toISOString() }).eq('id', item.id).select().maybeSingle()
+    if (error) { showToast(`No se pudo marcar como visto: ${formatError(error)}`); return }
+    if (data) setInternalNotifications((current) => current.map((notification) => notification.id === data.id ? data : notification))
+  }
+
   async function applyQuickTemplate(template) {
     const payload = { ...template.payload }
     if (template.type === 'task') {
@@ -1080,16 +1204,16 @@ export default function Dashboard({ session }) {
     return () => clearInterval(timer)
   }, [loading, reminders, activeReminder, settings])
 
-  if (loading) return <main className="centered-screen"><p className="eyebrow">SINCRONIZANDO ASCENDA V9.1…</p></main>
+  if (loading) return <main className="centered-screen"><p className="eyebrow">SINCRONIZANDO ASCENDA V10…</p></main>
 
   const currentRoutine = routineModal.routine
   const currentGoal = goalModal.goal
-  const mainProps = { userId: user.id, displayName, tasks, taskSubtasks, tags, taskTagLinks, events, reminders, dailyNotes, notes, notificationHistory, habits, habitLogs, routines, routineSteps, routineLogs, routineStepLogs, goals, milestones, xpEvents, metrics, today, recentDays, categories, settings, activeSeason, seasonMetrics, seasonHistory, dailyPlans, weeklyReviews, financeTransactions, financeCategories, financeMonthlyGoals }
+  const mainProps = { userId: user.id, displayName, tasks, taskSubtasks, tags, taskTagLinks, events, reminders, dailyNotes, notes, notificationHistory, habits, habitLogs, routines, routineSteps, routineLogs, routineStepLogs, goals, milestones, xpEvents, metrics, today, recentDays, categories, settings, activeSeason, seasonMetrics, seasonHistory, dailyPlans, weeklyReviews, financeTransactions, financeCategories, financeMonthlyGoals, financeSummary, focusSessions, dailyReflections, nonNegotiables, internalNotifications: allInternalNotifications, priorityAlerts: visiblePriorityAlerts }
 
-  return <main className={`app-shell ${settings.sidebar_collapsed ? 'sidebar-collapsed' : ''}`}>
+  return <main className={`app-shell ${settings.sidebar_collapsed ? 'sidebar-collapsed' : ''} ${settings.experience_mode === 'simple' ? 'simple-mode-shell' : ''} ${settings.visual_theme === 'focus' ? 'focus-mode-shell' : ''}`}>
     <aside className="sidebar panel">
       <div className="brand"><div className="brand-mark">A</div><div className="brand-copy"><strong>ASCENDA</strong><span>Personal System</span></div></div>
-      <button className="quick-create-button" type="button" onClick={() => setQuickCreateOpen(true)}><span>＋</span><b>Crear</b></button>
+      <button className="quick-create-button" type="button" onClick={() => setQuickCreateOpen(true)}><span>＋</span><b>{settings.experience_mode === 'simple' ? 'Agregar algo' : 'Crear'}</b></button>
       <nav className="nav-list">{visibleNavItems.map((item) => <button className={`nav-item ${activeSection === item.id ? 'active' : ''}`} type="button" onClick={() => navigate(item.id)} key={item.id}><span>{item.icon}</span><span>{item.label}</span></button>)}</nav>
       <div className="sidebar-bottom">
         <button className="collapse-button" type="button" onClick={() => toggleSidebar(!settings.sidebar_collapsed)}>{settings.sidebar_collapsed ? '»' : '« Contraer'}</button>
@@ -1099,9 +1223,9 @@ export default function Dashboard({ session }) {
     </aside>
 
     <section className="main-area">
-      <header className="topbar"><div><p className="eyebrow">{getTodayLabel().toUpperCase()}</p><h1>{getGreeting()}, {displayName}</h1></div><div className="topbar-actions"><span className="season-pill">♜ {seasonMetrics.rank.displayName}</span><span className="streak-pill">✦ {metrics.streak} días · +{metrics.streakBonus}% XP</span><button className="primary-button" type="button" onClick={() => setQuickCreateOpen(true)}>＋ Crear</button></div></header>
-      {databaseIssue && <div className="database-alert"><strong>Ejecutá las migraciones pendientes: V8.1, V8.2, V9 y `supabase/migrations/V9_1_FOCUS_AND_FINANCE.sql`.</strong><span>{databaseIssue}</span></div>}
-      {activeSection === 'inicio' && <HomeView {...mainProps} nextActivity={nextActivity} nowTick={nowTick} navigate={navigate} openCreate={openCreate} toggleTask={toggleTask} toggleHabit={toggleHabit} toggleRoutineStep={toggleRoutineStep} isActionPending={isActionPending} onSaveDailyPlan={saveDailyPlan} onSaveWeeklyReview={saveWeeklyReview} onApplyQuickTemplate={applyQuickTemplate} />}
+      <header className="topbar"><div><p className="eyebrow">{getTodayLabel().toUpperCase()}</p><h1>{getGreeting()}, {displayName}</h1></div><div className="topbar-actions"><span className="season-pill">♜ {seasonMetrics.rank.displayName}</span><span className="streak-pill">✦ {metrics.streak} días · +{metrics.streakBonus}% XP</span><button className="primary-button" type="button" onClick={() => setQuickCreateOpen(true)}>＋ {settings.experience_mode === 'simple' ? 'Agregar algo' : 'Crear'}</button></div></header>
+      {databaseIssue && <div className="database-alert"><strong>Ejecutá las migraciones pendientes: V8.1, V8.2, V9, V9.1 y `supabase/migrations/V10_SIMPLE_ASSISTED_FOCUS.sql`.</strong><span>{databaseIssue}</span></div>}
+      {activeSection === 'inicio' && <HomeView {...mainProps} nextActivity={nextActivity} nowTick={nowTick} navigate={navigate} openCreate={openCreate} toggleTask={toggleTask} toggleHabit={toggleHabit} toggleRoutineStep={toggleRoutineStep} isActionPending={isActionPending} onSaveDailyPlan={saveDailyPlan} onSaveWeeklyReview={saveWeeklyReview} onApplyQuickTemplate={applyQuickTemplate} onCreateQuickReminder={createQuickReminder} onSaveFocusSession={saveFocusSession} onSaveDailyReflection={saveDailyReflection} onSaveNonNegotiable={saveNonNegotiable} onDeleteNonNegotiable={deleteNonNegotiable} />}
       {activeSection === 'agenda' && <AgendaWorkspace {...mainProps} selectedDate={today} onSaveDailyNote={saveDailyNote} onDeleteDailyNote={deleteDailyNote} onOpenEvent={(event, defaultDate) => setEventModal({ open:true, event, defaultDate })} onDeleteEvent={deleteEvent} onCreateTaskFromText={createTaskFromText} onCreateReminderFromText={createReminderFromText} />}
       {activeSection === 'notas' && <NotesView {...mainProps} onOpenNote={(note) => setNoteModal({open:true,note})} onDeleteNote={deleteNote} />}
       {activeSection === 'recordatorios' && <RemindersView userId={user.id} reminders={reminders} notificationHistory={notificationHistory} onToast={showToast} onOpenReminder={(reminder) => setReminderModal({open:true,reminder})} onDeleteReminder={deleteReminder} onToggleReminder={toggleReminderEnabled} />}
@@ -1113,10 +1237,11 @@ export default function Dashboard({ session }) {
       {activeSection === 'perfil' && <ProfileView session={session} settings={settings} onProfileChanged={setProfile} />}
       {activeSection === 'progreso' && <ProgressDashboard {...mainProps} />}
       {activeSection === 'finanzas' && <FinanceView {...mainProps} onSaveFinanceTransaction={saveFinanceTransaction} onDeleteFinanceTransaction={deleteFinanceTransaction} onSaveFinanceCategory={saveFinanceCategory} onDeleteFinanceCategory={deleteFinanceCategory} onSaveFinanceMonthlyGoal={saveFinanceMonthlyGoal} />}
+      {activeSection === 'avisos' && <NotificationCenterView notifications={allInternalNotifications} onMarkRead={markInternalNotificationRead} navigate={navigate} />}
       {activeSection === 'configuracion' && <SettingsView user={user} profile={profile} settings={settings} customCategories={customCategories} onSaveSettings={saveSettings} onSaveProfile={saveProfile} onSaveCategory={saveCategory} onDeleteCategory={deleteCategory} onToggleSidebar={toggleSidebar} onToast={showToast} />}
     </section>
 
-    <QuickCreateModal open={quickCreateOpen} onClose={() => setQuickCreateOpen(false)} onSelect={openCreate} />
+    <QuickCreateModal open={quickCreateOpen} onClose={() => setQuickCreateOpen(false)} onSelect={openCreate} assistedMode={settings.assisted_mode_enabled} onQuickReminder={createQuickReminder} />
     <TaskModal open={taskModal.open} task={taskModal.task} categories={categories} taskSubtasks={taskSubtasks.filter((item) => item.task_id === taskModal.task?.id)} selectedTags={taskTagLinks.filter((item) => item.task_id === taskModal.task?.id).map((item) => tags.find((tag) => tag.id === item.tag_id)).filter(Boolean)} onClose={() => setTaskModal({ open: false, task: null })} onSave={saveTask} />
     <HabitModal open={habitModalOpen} categories={categories} onClose={() => setHabitModalOpen(false)} onSave={saveHabit} />
     <RoutineModal open={routineModal.open} routine={currentRoutine} routineSteps={routineSteps.filter((step) => step.routine_id === currentRoutine?.id)} categories={categories} onClose={() => setRoutineModal({ open: false, routine: null })} onSave={saveRoutine} />
@@ -1127,11 +1252,13 @@ export default function Dashboard({ session }) {
     <GoalModal open={goalModal.open} goal={currentGoal} milestones={milestones.filter((item) => item.goal_id === currentGoal?.id)} categories={categories} onClose={() => setGoalModal({ open: false, goal: null })} onSave={saveGoal} />
     <RpgCelebrationModal celebration={celebrationQueue[0] || null} visualTheme={settings.visual_theme} intenseEffects={settings.intense_effects_enabled && !settings.reduce_motion} onClose={() => setCelebrationQueue((current) => current.slice(1))} />
     <DailyWelcomeModal open={dailyWelcomeOpen} displayName={displayName} today={today} settings={settings} tasks={tasks} habits={habits} habitLogs={habitLogs} routines={routines} routineLogs={routineLogs} events={events} reminders={reminders} onClose={closeDailyWelcome} />
+    <UpdateNewsModal open={updateNewsOpen} onClose={closeUpdateNews} />
+    <TourModal open={tourOpen} step={tourStep} onNext={() => setTourStep((current) => current + 1)} onClose={closeTour} />
     <div className={`toast ${toast ? 'visible' : ''}`}>{toast}</div>
   </main>
 }
 
-function HomeView({ userId, displayName, tasks, habits, habitLogs, routines, routineSteps, routineLogs, routineStepLogs, goals, xpEvents, events, reminders, dailyPlans, weeklyReviews, metrics, today, settings, activeSeason, seasonMetrics, nextActivity, nowTick, navigate, openCreate, toggleTask, toggleHabit, toggleRoutineStep, isActionPending, onSaveDailyPlan, onSaveWeeklyReview, onApplyQuickTemplate }) {
+function HomeView({ userId, displayName, tasks, habits, habitLogs, routines, routineSteps, routineLogs, routineStepLogs, goals, xpEvents, events, reminders, dailyPlans, weeklyReviews, metrics, today, settings, activeSeason, seasonMetrics, nextActivity, nowTick, navigate, openCreate, toggleTask, toggleHabit, toggleRoutineStep, isActionPending, onSaveDailyPlan, onSaveWeeklyReview, onApplyQuickTemplate, onCreateQuickReminder, onSaveFocusSession, onSaveDailyReflection, onSaveNonNegotiable, onDeleteNonNegotiable, focusSessions, dailyReflections, nonNegotiables, priorityAlerts }) {
   const pendingTasks = tasks.filter((task) => !task.completed && task.status !== 'cancelada').slice(0, 5)
   const dueRoutines = routines.filter((routine) => routineIsDueToday(routine)).slice(0, 4)
   const activeGoals = goals.filter((goal) => goal.status === 'active').slice(0, 3)
@@ -1144,9 +1271,14 @@ function HomeView({ userId, displayName, tasks, habits, habitLogs, routines, rou
     eventsToday: events.filter((event) => event.event_date === today && event.status !== 'cancelled'),
     remindersToday: reminders.filter((reminder) => reminder.status === 'active' && reminder.next_trigger_at?.slice(0, 10) === today),
   }
+  if (settings.experience_mode === 'simple') {
+    return <SimpleHomeView displayName={displayName} summary={dailySummary} todayPlan={todayPlan} tasks={tasks} habits={habits} habitLogs={habitLogs} today={today} openCreate={openCreate} toggleTask={toggleTask} toggleHabit={toggleHabit} navigate={navigate} />
+  }
   return <section className="view-stack enter-up">
     {settings.experience_mode === 'rpg' && <RpgCommandCenter metrics={metrics} seasonMetrics={seasonMetrics} settings={settings} nextActivity={nextActivity} nowTick={nowTick} />}
     <article className="daily-command-panel panel"><div><p className="eyebrow">MI DÍA</p><h1>{getGreeting()}, {displayName?.split(' ')[0] || 'Usuario'}.</h1><p>Hoy tenés {dailySummary.openTasks.length} tareas abiertas, {dailySummary.pendingHabits.length} hábitos pendientes, {dailySummary.eventsToday.length} eventos y {dailySummary.remindersToday.length} recordatorios.</p></div><div className="daily-command-actions"><button className="primary-button" type="button" onClick={() => openCreate('task')}>Nueva tarea</button><button className="ghost-button" type="button" onClick={() => navigate('progreso')}>Ver progreso</button></div></article>
+    {settings.visual_theme === 'focus' && <FocusDashboardPanel todayPlan={todayPlan} nonNegotiables={nonNegotiables} focusSessions={focusSessions} onSaveNonNegotiable={onSaveNonNegotiable} onDeleteNonNegotiable={onDeleteNonNegotiable} onSaveFocusSession={onSaveFocusSession} />}
+    <section className="dashboard-grid"><AutomaticPriorityPanel alerts={priorityAlerts} navigate={navigate} /><QuickRemindersPanel onCreateQuickReminder={onCreateQuickReminder} /></section>
     <section className="hero-grid">
       <article className="hero-card panel"><p className="eyebrow">FRASE DEL DÍA</p><h2>{getDailyQuote(settings.custom_quote)}</h2><p>Tu sistema registra constancia, no perfección. Elegí una acción concreta para avanzar.</p><button className="ghost-button" type="button" onClick={() => navigate('configuracion')}>Personalizar frase</button></article>
       <article className="next-activity panel"><p className="eyebrow">PRÓXIMA ACTIVIDAD</p>{nextActivity ? <><span className="activity-type">{nextActivity.type}</span><h2>{nextActivity.title}</h2><p>{nextActivity.subtitle}</p><strong>{formatCountdown(nextActivity.date, nowTick)}</strong></> : <><h2>Agenda despejada</h2><p>Creá una tarea, rutina u objetivo para planificar tu próximo avance.</p><button className="ghost-button" type="button" onClick={() => openCreate('task')}>Crear tarea</button></>}</article>
@@ -1166,6 +1298,7 @@ function HomeView({ userId, displayName, tasks, habits, habitLogs, routines, rou
     </section>}
 
     <section className="dashboard-grid"><DayPlannerPanel plan={todayPlan} today={today} summary={dailySummary} onSave={onSaveDailyPlan} /><WeeklyReviewPanel reviews={weeklyReviews} tasks={tasks} habits={habits} habitLogs={habitLogs} routines={routines} routineLogs={routineLogs} goals={goals} xpEvents={xpEvents} settings={settings} onSave={onSaveWeeklyReview} /></section>
+    {settings.night_review_enabled !== false && <section className="dashboard-grid"><NightReviewPanel today={today} reviews={dailyReflections} onSave={onSaveDailyReflection} /></section>}
     {settings.experience_mode !== 'simple' && <section className="dashboard-grid"><QuickTemplatesPanel onApplyTemplate={onApplyQuickTemplate} /><article className="content-panel panel"><div className="card-heading"><div><p className="eyebrow">RESUMEN SEMANAL</p><h2>XP obtenida</h2></div><span className="positive-pill">Sincronizado</span></div><WeeklyChart week={metrics.week} /></article></section>}
     <section className="dashboard-grid"><MissionDashboardCard userId={userId} navigate={navigate} /></section>
   </section>

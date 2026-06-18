@@ -1300,3 +1300,372 @@ body[data-visual-theme="focus"] .daily-score {
   filter: none;
   animation: none;
 }
+
+/* =============================================================================
+   ASCENDA V10 · Simple, Focus y Asistencia
+============================================================================= */
+.simple-mode-shell {
+  --font-scale-simple: 1.12;
+}
+.simple-mode-shell .topbar .season-pill,
+.simple-mode-shell .topbar .streak-pill,
+.simple-mode-shell .xp-pill,
+.simple-mode-shell .level-card,
+.simple-mode-shell .season-mini-card,
+.simple-mode-shell .daily-score,
+.simple-mode-shell .hero-card,
+.simple-mode-shell .next-activity {
+  display: none !important;
+}
+.simple-mode-shell .main-area {
+  max-width: 980px;
+}
+.simple-mode-shell .section-heading h2,
+.simple-mode-shell .simple-today-hero h1 {
+  font-size: clamp(2rem, 5vw, 4.4rem);
+  letter-spacing: -.05em;
+}
+.simple-mode-shell .nav-item,
+.simple-mode-shell .setting-row,
+.simple-mode-shell input,
+.simple-mode-shell textarea,
+.simple-mode-shell select,
+.simple-mode-shell button {
+  font-size: calc(1rem * var(--font-scale-simple));
+}
+.simple-mode-shell .content-panel,
+.simple-mode-shell .panel {
+  border-radius: 22px;
+}
+.simple-home-view {
+  display: grid;
+  gap: 18px;
+}
+.simple-today-hero {
+  display: grid;
+  gap: 16px;
+  padding: clamp(24px, 6vw, 54px);
+  min-height: 280px;
+  align-content: center;
+  background: radial-gradient(circle at 10% 10%, rgba(66,218,200,.12), transparent 38%), var(--panel);
+}
+.simple-today-hero p:not(.eyebrow) {
+  max-width: 620px;
+  color: var(--muted);
+  font-size: 1.2rem;
+  line-height: 1.55;
+}
+.simple-primary-action {
+  width: fit-content;
+  border: 0;
+  border-radius: 18px;
+  padding: 16px 22px;
+  color: #06110f;
+  background: var(--accent);
+  font-weight: 950;
+  box-shadow: var(--glow);
+}
+.simple-focus-card {
+  display: grid;
+  gap: 8px;
+  padding: 20px;
+}
+.simple-focus-card span {
+  color: var(--muted);
+  text-transform: uppercase;
+  font-size: .74rem;
+  font-weight: 900;
+  letter-spacing: .12em;
+}
+.simple-focus-card strong {
+  font-size: clamp(1.3rem, 3vw, 2rem);
+}
+.simple-list-panel {
+  padding: 20px;
+}
+.simple-action-list {
+  display: grid;
+  gap: 10px;
+}
+.simple-action-list button {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px;
+  color: var(--text);
+  background: rgba(255,255,255,.035);
+  text-align: left;
+}
+.simple-action-list button span {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  color: #06110f;
+  background: var(--accent);
+  font-weight: 950;
+}
+.simple-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.simple-shortcuts button {
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 18px;
+  color: var(--text);
+  background: var(--panel);
+  font-weight: 900;
+}
+.update-news-modal,
+.tour-modal {
+  width: min(620px, calc(100vw - 28px));
+  padding: 22px;
+}
+.update-news-list,
+.notification-center-list,
+.priority-alert-list,
+.simple-alert-list {
+  display: grid;
+  gap: 10px;
+}
+.update-news-item,
+.internal-notification,
+.priority-alert,
+.finance-alert,
+.non-negotiable-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: rgba(255,255,255,.04);
+}
+.update-news-item span,
+.internal-notification > span,
+.priority-alert > span,
+.finance-alert > span {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  color: #06110f;
+  background: var(--accent);
+  font-weight: 950;
+}
+.update-news-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+  margin-top: 18px;
+}
+.update-news-footer small {
+  color: var(--muted);
+  line-height: 1.4;
+}
+.tour-modal {
+  display: grid;
+  gap: 16px;
+}
+.tour-modal h2 {
+  font-size: clamp(2rem, 5vw, 3.7rem);
+}
+.tour-modal p {
+  color: var(--muted);
+  line-height: 1.6;
+}
+.tour-dots,
+.focus-preset-row,
+.quick-reminder-grid,
+.assisted-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.tour-dots i {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.22);
+}
+.tour-dots i.active {
+  width: 26px;
+  background: var(--accent);
+}
+.assisted-create-modal .quick-create-grid button,
+.assisted-shortcuts button {
+  min-height: 96px;
+}
+.assisted-shortcuts button {
+  flex: 1 1 160px;
+  border: 1px solid rgba(229,255,63,.35);
+  border-radius: 16px;
+  padding: 14px;
+  text-align: left;
+  color: var(--text);
+  background: rgba(229,255,63,.06);
+}
+.assisted-shortcuts small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+}
+.focus-mode-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(320px, .9fr);
+  gap: 16px;
+}
+.focus-deep-panel {
+  display: grid;
+  gap: 16px;
+  padding: 24px;
+  background: radial-gradient(circle at 10% 10%, rgba(229,255,63,.14), transparent 35%), #050606;
+}
+.focus-deep-panel h2 {
+  font-size: clamp(2rem, 5vw, 4rem);
+}
+.focus-deep-panel p {
+  color: var(--muted);
+  line-height: 1.6;
+}
+.non-negotiable-list,
+.non-negotiable-form,
+.night-review-form,
+.focus-timer-panel {
+  display: grid;
+  gap: 10px;
+}
+.non-negotiable-item {
+  grid-template-columns: auto 1fr auto;
+}
+.non-negotiable-item span {
+  color: var(--accent);
+}
+.non-negotiable-form {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.focus-timer-panel h2 {
+  font-size: clamp(2.5rem, 8vw, 6rem);
+  letter-spacing: -.07em;
+}
+.focus-preset-row button {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 9px 12px;
+  color: var(--text);
+  background: var(--bg-soft);
+  font-weight: 900;
+}
+.focus-preset-row button.selected {
+  color: #06110f;
+  background: var(--accent);
+}
+.priority-alert {
+  width: 100%;
+  color: var(--text);
+  text-align: left;
+}
+.priority-alert small,
+.internal-notification small,
+.internal-notification p {
+  color: var(--muted);
+}
+.priority-alert.danger > span,
+.finance-alert.danger > span,
+.simple-alert.danger {
+  background: var(--danger);
+  color: #fff;
+}
+.priority-alert.warning > span,
+.finance-alert.warning > span,
+.simple-alert.warning {
+  background: #ffd166;
+  color: #120f05;
+}
+.priority-alert.focus > span {
+  background: var(--accent);
+}
+.finance-alert-strip {
+  display: grid;
+  gap: 10px;
+}
+.simple-finance-hero {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  padding: 20px;
+}
+.simple-finance-hero div {
+  display: grid;
+  gap: 6px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: rgba(255,255,255,.035);
+}
+.simple-finance-hero span {
+  color: var(--muted);
+  text-transform: uppercase;
+  font-size: .72rem;
+  letter-spacing: .1em;
+  font-weight: 900;
+}
+.simple-finance-hero strong {
+  font-size: clamp(1.5rem, 4vw, 2.7rem);
+}
+.simple-alert {
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(255,255,255,.05);
+}
+.notification-center-view .internal-notification.read {
+  opacity: .7;
+}
+.focus-mode-shell .daily-command-panel,
+.focus-mode-shell .focus-deep-panel {
+  border-color: rgba(229,255,63,.24);
+  box-shadow: 0 0 48px rgba(229,255,63,.06);
+}
+.simple-mode-note {
+  margin-top: 12px;
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid rgba(66,218,200,.25);
+  border-radius: 14px;
+  background: rgba(66,218,200,.07);
+}
+.simple-mode-note span {
+  color: var(--muted);
+}
+@media (max-width: 980px) {
+  .focus-mode-grid,
+  .simple-finance-hero {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 680px) {
+  .simple-shortcuts,
+  .non-negotiable-form {
+    grid-template-columns: 1fr;
+  }
+  .update-news-footer {
+    display: grid;
+  }
+}
+.finance-flags {
+  display: grid;
+  gap: 8px;
+}
+.setting-row.compact {
+  padding: 10px;
+}

@@ -36,6 +36,10 @@ export default function SettingsView({ user, profile, settings, customCategories
         sidebar_collapsed: Boolean(form.sidebar_collapsed),
         daily_welcome_enabled: Boolean(form.daily_welcome_enabled),
         weekly_review_enabled: Boolean(form.weekly_review_enabled),
+        assisted_mode_enabled: Boolean(form.assisted_mode_enabled),
+        updates_modal_enabled: Boolean(form.updates_modal_enabled),
+        night_review_enabled: Boolean(form.night_review_enabled),
+        priority_assist_enabled: Boolean(form.priority_assist_enabled),
       }),
     ])
     setSaving(false)
@@ -60,6 +64,7 @@ export default function SettingsView({ user, profile, settings, customCategories
       <article className="content-panel panel settings-panel">
         <div className="card-heading"><div><p className="eyebrow">INTERFAZ</p><h3>Modo de experiencia</h3></div></div>
         <div className="mode-selector">{MODE_OPTIONS.map((mode) => <button className={form.experience_mode === mode.id ? 'selected' : ''} type="button" onClick={() => update('experience_mode', mode.id)} key={mode.id}><span>{mode.icon}</span><strong>{mode.title}</strong><small>{mode.description}</small></button>)}</div>
+        {form.experience_mode === 'simple' && <div className="simple-mode-note"><strong>Modo Simple real</strong><span>Ascenda reduce menús, agranda textos y muestra solo lo necesario en cada sección compatible.</span></div>}
       </article>
 
       <article className="content-panel panel settings-panel full-width">
@@ -75,6 +80,8 @@ export default function SettingsView({ user, profile, settings, customCategories
           <label className="setting-row"><span><strong>Reducir animaciones</strong><small>Desactiva transiciones y movimientos decorativos.</small></span><input type="checkbox" checked={form.reduce_motion} onChange={(event) => update('reduce_motion', event.target.checked)} /></label>
           <label className="setting-row"><span><strong>Bienvenida diaria</strong><small>Muestra una pantalla animada una vez por día al abrir Ascenda.</small></span><input type="checkbox" checked={form.daily_welcome_enabled !== false} onChange={(event) => update('daily_welcome_enabled', event.target.checked)} /></label>
           <label className="setting-row"><span><strong>Revisión semanal</strong><small>Activa el bloque guiado para cerrar la semana y guardar aprendizajes.</small></span><input type="checkbox" checked={form.weekly_review_enabled !== false} onChange={(event) => update('weekly_review_enabled', event.target.checked)} /></label>
+          <label className="setting-row"><span><strong>Novedades por versión</strong><small>Muestra un resumen de cambios cuando subimos una actualización.</small></span><input type="checkbox" checked={form.updates_modal_enabled !== false} onChange={(event) => update('updates_modal_enabled', event.target.checked)} /></label>
+          <label className="setting-row"><span><strong>Revisión nocturna</strong><small>Activa el cierre del día con preguntas simples.</small></span><input type="checkbox" checked={form.night_review_enabled !== false} onChange={(event) => update('night_review_enabled', event.target.checked)} /></label>
         </div>
       </article>
 
@@ -84,6 +91,8 @@ export default function SettingsView({ user, profile, settings, customCategories
           <label className="setting-row"><span><strong>Tema claro</strong><small>Usar una interfaz luminosa en lugar del modo oscuro.</small></span><input type="checkbox" checked={form.theme === 'light'} onChange={(event) => update('theme', event.target.checked ? 'light' : 'dark')} /></label>
           <label className="setting-row"><span><strong>Alto contraste</strong><small>Refuerza bordes, textos y estados visuales.</small></span><input type="checkbox" checked={form.high_contrast} onChange={(event) => update('high_contrast', event.target.checked)} /></label>
           <label className="setting-row"><span><strong>Penalizaciones por demora</strong><small>Preferencia preparada para la lógica de tareas atrasadas.</small></span><input type="checkbox" checked={form.penalties_enabled} onChange={(event) => update('penalties_enabled', event.target.checked)} /></label>
+          <label className="setting-row"><span><strong>Modo Asistido</strong><small>Usa acciones guiadas y recordatorios rápidos al crear cosas.</small></span><input type="checkbox" checked={Boolean(form.assisted_mode_enabled)} onChange={(event) => update('assisted_mode_enabled', event.target.checked)} /></label>
+          <label className="setting-row"><span><strong>Prioridades automáticas</strong><small>Ascenda destaca atrasos, hábitos pendientes y alertas importantes.</small></span><input type="checkbox" checked={form.priority_assist_enabled !== false} onChange={(event) => update('priority_assist_enabled', event.target.checked)} /></label>
           <label><span>Adaptación de color</span><select value={form.color_vision_mode} onChange={(event) => update('color_vision_mode', event.target.value)}><option value="default">Predeterminada</option><option value="tritanopia">Tritanopia</option><option value="protanopia">Protanopia</option><option value="deuteranopia">Deuteranopia</option></select></label>
           <button className="ghost-button align-left" type="button" onClick={toggleSidebar}>{form.sidebar_collapsed ? 'Expandir barra lateral' : 'Contraer barra lateral'}</button>
         </div>

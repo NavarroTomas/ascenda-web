@@ -1,0 +1,24 @@
+Ascenda V10 · Simple, Focus y Asistencia
+
+Archivos modificados:
+- package.json
+- src/components/Dashboard.jsx
+- src/components/SettingsView.jsx
+- src/components/QuickCreateModal.jsx
+- src/components/FinanceView.jsx
+- src/lib/accountManagement.js
+- src/styles.css
+
+Archivos nuevos:
+- src/components/SimpleHomeView.jsx
+- src/components/UpdateNewsModal.jsx
+- src/components/TourModal.jsx
+- src/components/QuickRemindersPanel.jsx
+- src/components/FocusTimerPanel.jsx
+- src/components/FocusDashboardPanel.jsx
+- src/components/NightReviewPanel.jsx
+- src/components/AutomaticPriorityPanel.jsx
+- src/components/NotificationCenterView.jsx
+- src/data/updateNotes.js
+- src/lib/v10Assistance.js
+- supabase/migrations/V10_SIMPLE_ASSISTED_FOCUS.sql

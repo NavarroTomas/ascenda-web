@@ -1,14 +1,36 @@
-export default function QuickCreateModal({ open, onClose, onSelect }) {
+const OPTIONS = [
+  { id:'task',icon:'✓',title:'Tarea',copy:'Algo concreto para hacer.' },
+  { id:'reminder',icon:'⚑',title:'Recordatorio',copy:'Un aviso para no olvidarte.' },
+  { id:'habit',icon:'◉',title:'Hábito',copy:'Algo que querés repetir.' },
+  { id:'daily_note',icon:'✎',title:'Anotación de hoy',copy:'Una idea rápida para guardar.' },
+  { id:'event',icon:'◷',title:'Evento',copy:'Algo con fecha u horario.' },
+  { id:'note',icon:'▤',title:'Nota',copy:'Información permanente.' },
+  { id:'routine',icon:'↻',title:'Rutina',copy:'Una secuencia de pasos.' },
+  { id:'goal',icon:'◇',title:'Objetivo',copy:'Una meta más grande.' },
+]
+
+export default function QuickCreateModal({ open, onClose, onSelect, assistedMode = false, onQuickReminder }) {
   if (!open) return null
-  const options = [
-    { id:'task',icon:'✓',title:'Nueva tarea',copy:'Actividad concreta con subtareas, etiquetas y XP final.' },
-    { id:'event',icon:'◷',title:'Nuevo evento',copy:'Bloque de agenda con horario y repetición.' },
-    { id:'reminder',icon:'⏰',title:'Nuevo recordatorio',copy:'Aviso interno con sonido y opción de posponer.' },
-    { id:'daily_note',icon:'✎',title:'Anotación de hoy',copy:'Entrada libre con guardado automático.' },
-    { id:'note',icon:'▤',title:'Nueva nota',copy:'Información permanente, fijable y bloqueable con PIN.' },
-    { id:'habit',icon:'◉',title:'Nuevo hábito',copy:'Acción repetible para sostener durante el tiempo.' },
-    { id:'routine',icon:'↻',title:'Nueva rutina',copy:'Secuencia simple o estructurada con bonus final.' },
-    { id:'goal',icon:'◇',title:'Nuevo objetivo',copy:'Meta personal con progreso e hitos opcionales.' },
-  ]
-  return <div className="modal-backdrop" onMouseDown={(event)=>event.target===event.currentTarget&&onClose()}><section className="quick-create-modal panel enter-up"><div className="modal-heading"><div><p className="eyebrow">ACCIÓN RÁPIDA</p><h2>¿Qué querés crear?</h2></div><button className="icon-button" type="button" onClick={onClose}>×</button></div><div className="quick-create-grid">{options.map(option=><button type="button" onClick={()=>onSelect(option.id)} key={option.id}><span>{option.icon}</span><strong>{option.title}</strong><small>{option.copy}</small></button>)}</div></section></div>
+  return (
+    <div className="modal-backdrop" onMouseDown={(event)=>event.target===event.currentTarget&&onClose()}>
+      <section className={`quick-create-modal panel enter-up ${assistedMode ? 'assisted-create-modal' : ''}`}>
+        <div className="modal-heading">
+          <div>
+            <p className="eyebrow">{assistedMode ? 'MODO ASISTIDO' : 'ACCIÓN RÁPIDA'}</p>
+            <h2>{assistedMode ? '¿Qué necesitás hacer?' : '¿Qué querés crear?'}</h2>
+            {assistedMode && <p>Elegí una opción simple. Ascenda abre el formulario correcto sin mostrarte todo de golpe.</p>}
+          </div>
+          <button className="icon-button" type="button" onClick={onClose}>×</button>
+        </div>
+        {assistedMode && <div className="assisted-shortcuts">
+          <button type="button" onClick={() => onQuickReminder?.(10, 'En 10 minutos')}><strong>Recordame en 10 minutos</strong><small>Para algo inmediato.</small></button>
+          <button type="button" onClick={() => onQuickReminder?.(60, 'En 1 hora')}><strong>Recordame en 1 hora</strong><small>Para volver después.</small></button>
+          <button type="button" onClick={() => onQuickReminder?.(1440, 'Mañana')}><strong>Recordame mañana</strong><small>Para no cargar fecha manual.</small></button>
+        </div>}
+        <div className="quick-create-grid">
+          {OPTIONS.map(option => <button type="button" onClick={()=>onSelect(option.id)} key={option.id}><span>{option.icon}</span><strong>{option.title}</strong><small>{option.copy}</small></button>)}
+        </div>
+      </section>
+    </div>
+  )
 }

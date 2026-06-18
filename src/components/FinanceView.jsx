@@ -25,6 +25,9 @@ const EMPTY_TRANSACTION = {
   transaction_date: '',
   payment_method: 'Otro',
   recurrence_type: 'none',
+  is_fixed: false,
+  expected: false,
+  due_day: '',
   notes: '',
 }
 
@@ -53,6 +56,7 @@ export default function FinanceView({
   onSaveFinanceCategory,
   onDeleteFinanceCategory,
   onSaveFinanceMonthlyGoal,
+  settings,
 }) {
   const [transactionForm, setTransactionForm] = useState({ ...EMPTY_TRANSACTION, transaction_date: today })
   const [categoryForm, setCategoryForm] = useState(EMPTY_CATEGORY)
@@ -70,6 +74,18 @@ export default function FinanceView({
     () => getFinanceMonthSummary({ transactions: financeTransactions, monthlyGoal: currentGoal, monthStart }),
     [financeTransactions, currentGoal, monthStart]
   )
+  const financeAlerts = useMemo(() => {
+    const alerts = []
+    if (summary.expenseLimit > 0 && summary.expenseProgress >= 100) alerts.push({ tone: 'danger', text: 'Superaste el límite de gastos del mes.' })
+    else if (summary.expenseLimit > 0 && summary.expenseProgress >= 85) alerts.push({ tone: 'warning', text: `Estás cerca del límite de gastos (${summary.expenseProgress}%).` })
+    if (summary.savingsGoal > 0 && summary.remainingToSave > 0) alerts.push({ tone: 'info', text: `Te falta ahorrar ${formatMoney(summary.remainingToSave)} para cumplir el objetivo.` })
+    if (summary.incomeGoal > 0 && summary.income < summary.incomeGoal) alerts.push({ tone: 'info', text: `Ingresos actuales: ${formatMoney(summary.income)} de ${formatMoney(summary.incomeGoal)}.` })
+    return alerts
+  }, [summary])
+
+  if (settings?.experience_mode === 'simple') {
+    return <SimpleFinanceView summary={summary} financeAlerts={financeAlerts} financeTransactions={financeTransactions} onNew={() => setTransactionForm({ ...EMPTY_TRANSACTION, transaction_date: today })} />
+  }
   const visibleCategories = categories.filter((category) => categoryMatchesType(category, transactionForm.type))
 
   function updateTransaction(field, value) {
@@ -100,6 +116,9 @@ export default function FinanceView({
       transaction_date: transaction.transaction_date || today,
       payment_method: transaction.payment_method || 'Otro',
       recurrence_type: transaction.recurrence_type || 'none',
+      is_fixed: Boolean(transaction.is_fixed),
+      expected: Boolean(transaction.expected),
+      due_day: transaction.due_day || '',
       notes: transaction.notes || '',
     })
   }
@@ -123,6 +142,9 @@ export default function FinanceView({
       transaction_date: toInputDate(transactionForm.transaction_date, today),
       payment_method: transactionForm.payment_method || null,
       recurrence_type: transactionForm.recurrence_type || 'none',
+      is_fixed: Boolean(transactionForm.is_fixed),
+      expected: Boolean(transactionForm.expected),
+      due_day: transactionForm.due_day ? Number(transactionForm.due_day) : null,
       notes: transactionForm.notes.trim() || null,
     }
     const ok = await onSaveFinanceTransaction?.(payload, editingTransaction)
@@ -180,6 +202,10 @@ export default function FinanceView({
         </div>
       </section>
 
+      {financeAlerts.length > 0 && <section className="finance-alert-strip">
+        {financeAlerts.map((alert) => <div className={`finance-alert ${alert.tone}`} key={alert.text}><span>!</span><strong>{alert.text}</strong></div>)}
+      </section>}
+
       <section className="dashboard-grid finance-grid-main">
         <article className="content-panel panel finance-form-panel">
           <div className="card-heading">
@@ -202,6 +228,11 @@ export default function FinanceView({
               <label><span>Método</span><select value={transactionForm.payment_method} onChange={(event) => updateTransaction('payment_method', event.target.value)}>{PAYMENT_METHODS.map((method) => <option value={method} key={method}>{method}</option>)}</select></label>
             </div>
             <label><span>Repetición</span><select value={transactionForm.recurrence_type} onChange={(event) => updateTransaction('recurrence_type', event.target.value)}>{Object.entries(RECURRENCE_LABELS).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
+            <div className="finance-flags">
+              <label className="setting-row compact"><span><strong>Gasto/ingreso fijo</strong><small>Útil para gimnasio, servicios o ingresos esperados.</small></span><input type="checkbox" checked={Boolean(transactionForm.is_fixed)} onChange={(event) => updateTransaction('is_fixed', event.target.checked)} /></label>
+              <label className="setting-row compact"><span><strong>Esperado</strong><small>Planificado, todavía no necesariamente ocurrido.</small></span><input type="checkbox" checked={Boolean(transactionForm.expected)} onChange={(event) => updateTransaction('expected', event.target.checked)} /></label>
+            </div>
+            <label><span>Día de vencimiento opcional</span><input inputMode="numeric" value={transactionForm.due_day} onChange={(event) => updateTransaction('due_day', event.target.value)} placeholder="10" /></label>
             <label><span>Notas opcionales</span><textarea rows="2" value={transactionForm.notes} onChange={(event) => updateTransaction('notes', event.target.value)} /></label>
             <button className="primary-button wide" type="submit" disabled={saving || !normalizeMoney(transactionForm.amount)}>{saving ? 'Guardando…' : editingTransaction ? 'Guardar cambios' : 'Agregar movimiento'}</button>
           </form>
@@ -285,6 +316,22 @@ export default function FinanceView({
           </div>
         </article>
       </section>
+    </section>
+  )
+}
+
+
+function SimpleFinanceView({ summary, financeAlerts = [], financeTransactions = [] }) {
+  return (
+    <section className="view-stack enter-up finance-view simple-finance-view">
+      <header className="section-heading"><div><p className="eyebrow">FINANZAS SIMPLES</p><h2>Este mes</h2><p>Solo los datos necesarios para saber cómo venís.</p></div></header>
+      <article className="simple-finance-hero panel">
+        <div><span>Entró</span><strong>{formatMoney(summary.income)}</strong></div>
+        <div><span>Gastaste</span><strong>{formatMoney(summary.expenses)}</strong></div>
+        <div><span>Te queda</span><strong>{formatMoney(summary.balance)}</strong></div>
+      </article>
+      {financeAlerts.length > 0 && <article className="content-panel panel"><div className="simple-alert-list">{financeAlerts.map((alert) => <p className={`simple-alert ${alert.tone}`} key={alert.text}>{alert.text}</p>)}</div></article>}
+      <article className="content-panel panel"><div className="card-heading"><div><p className="eyebrow">ÚLTIMOS MOVIMIENTOS</p><h2>Movimientos recientes</h2></div></div><div className="finance-transaction-list">{financeTransactions.slice(0, 6).map((transaction) => <div className={`finance-transaction ${transaction.type}`} key={transaction.id}><span>{transaction.type === 'income' ? '＋' : '−'}</span><div><strong>{transaction.description || transaction.category_name || 'Movimiento'}</strong><small>{transaction.transaction_date} · {transaction.category_name || 'Sin categoría'}</small></div><b>{transaction.type === 'income' ? '+' : '-'}{formatMoney(transaction.amount)}</b></div>)}</div></article>
     </section>
   )
 }
