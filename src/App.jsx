@@ -53,13 +53,13 @@ const sections = [
   ['history', 'Historial de ventas', CircleDollarSign],
 ]
 
-const CURRENT_UPDATE_VERSION = 'v25-cancelar-compras'
-const CURRENT_UPDATE_TITLE = 'Actualización V25'
+const CURRENT_UPDATE_VERSION = 'v28-cancelacion-integral-saldo-cliente'
+const CURRENT_UPDATE_TITLE = 'Actualización V28'
 const CURRENT_UPDATE_ITEMS = [
-  'Ahora las facturas de compra se pueden cancelar sin eliminarlas del historial.',
-  'Al cancelar una compra, el sistema descuenta del stock la mercadería ingresada.',
-  'La cuenta corriente del proveedor se corrige automáticamente y la factura queda en estado Cancelada.',
-  'El historial conserva la factura cancelada con fecha y motivo de cancelación.',
+  'Se agregan botones claros para cancelar facturas ya hechas desde Historial de ventas e Historial de compras.',
+  'Al cancelar una venta se repone el stock, se corrige la cuenta corriente del cliente y se excluye del balance.',
+  'Al cancelar una compra se descuenta el stock ingresado, se corrige la cuenta del proveedor y se excluye del balance.',
+  'El comprobante de venta ahora muestra el saldo pendiente total del cliente, vinculado a su cuenta corriente.',
 ]
 
 function App() {
@@ -806,7 +806,7 @@ function Brands(props) { return <GenericCrud {...props} title="Marcas" descripti
 function Providers(props) { return <GenericCrud {...props} title="Proveedores" description="Datos para registrar facturas de compra." items={props.providers} emptyForm={emptyProvider} saveTable="providers" fields={[{ key: 'name', label: 'Nombre / Razón social', required: true }, { key: 'document', label: 'CUIT / Documento' }, { key: 'phone', label: 'Teléfono' }, { key: 'email', label: 'Correo' }, { key: 'address', label: 'Dirección' }, { key: 'notes', label: 'Notas', type: 'textarea' }]} deleteMessage="¿Eliminar este proveedor? Las compras anteriores conservarán el comprobante pero quedarán sin proveedor asociado." /> }
 function PaymentMethods(props) { return <GenericCrud {...props} title="Medios de pago" description="Administrá las opciones disponibles al cobrar." items={props.paymentMethods} emptyForm={emptyPaymentMethod} saveTable="payment_methods" fields={[{ key: 'name', label: 'Nombre', required: true }, { key: 'active', label: 'Medio de pago activo', type: 'checkbox' }]} deleteMessage="¿Eliminar este medio de pago? Los comprobantes anteriores conservarán el importe pero quedarán sin método asociado." /> }
 
-function NewSale({ products, brands, customers, priceLists, priceListItems, paymentMethods, refresh, flash, setError, setSection, setInvoiceGuard }) {
+function NewSale({ products, brands, customers, priceLists, priceListItems, paymentMethods, accountMovements, refresh, flash, setError, setSection, setInvoiceGuard }) {
   const activeProducts = products.filter((product) => product.active)
   const activePriceLists = priceLists.filter((list) => list.active)
   const defaultPriceList = activePriceLists.find((list) => list.is_default) || activePriceLists[0]
@@ -931,9 +931,19 @@ function NewSale({ products, brands, customers, priceLists, priceListItems, paym
     if (error) return setError(error.message)
     setInvoiceGuard?.(null)
     const selectedCustomer = customers.find((customer) => customer.id === customerId)
+    const previousCustomerBalance = customerId
+      ? accountMovements
+        .filter((movement) => movement.customer_id === customerId)
+        .reduce((sum, movement) => sum + Number(movement.amount || 0), 0)
+      : 0
+    const newCustomerBalance = customerId
+      ? roundCurrency(previousCustomerBalance + Number(data?.outstanding_amount || 0))
+      : 0
+
     setReceipt({
       ...data,
       customer_address: selectedCustomer?.address || '',
+      customer_account_balance: newCustomerBalance,
     })
     setCart([])
     setPayments([{ payment_method_id: '', amount: '' }])
@@ -943,7 +953,7 @@ function NewSale({ products, brands, customers, priceLists, priceListItems, paym
     setSection('history')
   }
 
-  return <div className="sale-layout"><section className="panel product-picker"><h2>Productos</h2><label>Filtrar por marca<select value={saleBrandId} onChange={(event) => setSaleBrandId(event.target.value)}><option value="">Todas las marcas</option>{brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}</select></label><SearchBox value={search} setValue={setSearch} placeholder="Buscar producto" />{visible.map((product) => <button key={product.id} className="product-option" onClick={() => add(product)}><span><strong>{product.name}</strong><small>{product.sku || 'Sin código'} · {product.brands?.name || 'Sin marca'} · Stock: {product.stock}</small></span><b>{money(getProductPrice(product))}</b></button>)}</section><section className="panel"><div className="panel-header"><h2>Comprobante de venta</h2><p>La lista del cliente se aplica automáticamente. También podés aplicar descuentos por producto.</p></div><div className="form-grid"><label>Cliente<select value={customerId} onChange={(event) => changeCustomer(event.target.value)}><option value="">Consumidor final</option>{customers.map((customer) => <option value={customer.id} key={customer.id}>{customer.name}</option>)}</select></label><label>Lista de precios<select value={priceListId} onChange={(event) => changePriceList(event.target.value)}><option value="">Precio de venta general</option>{activePriceLists.map((list) => <option key={list.id} value={list.id}>{list.name}{list.is_default ? ' · Predeterminada' : ''}</option>)}</select></label></div><div className="table-wrap"><table><thead><tr><th>Producto</th><th>Cantidad</th><th>Precio</th><th>Desc. %</th><th>Total línea</th><th></th></tr></thead><tbody>{cart.map((item, index) => <tr key={item.product_id}><td>{item.product_name}</td><td><input className="small-input" inputMode="decimal" value={item.quantity} onChange={(event) => updateCart(index, 'quantity', event.target.value)} /></td><td><input className="price-input" inputMode="decimal" value={item.unit_price} onChange={(event) => updateCart(index, 'unit_price', event.target.value)} /></td><td><input className="small-input" inputMode="decimal" placeholder="0" value={item.discount_percent} onChange={(event) => updateCart(index, 'discount_percent', event.target.value)} /></td><td>{money(lineTotal(item))}</td><td><button className="link-btn danger" onClick={() => setCart((current) => current.filter((_, itemIndex) => itemIndex !== index))}>Quitar</button></td></tr>)}</tbody></table></div><div className="total-row"><span>Subtotal sin ajustes</span><strong>{money(subtotal)}</strong></div>{discountAmount > 0 && <div className="total-row"><span>Descuentos aplicados</span><strong>- {money(discountAmount)}</strong></div>}<div className="total-row"><span>Total final</span><strong>{money(total)}</strong></div><div className="payments"><h3>Medios de pago</h3>{payments.map((payment, index) => <div className="payment-row" key={index}><select value={payment.payment_method_id} onChange={(event) => updatePayment(index, 'payment_method_id', event.target.value)}><option value="">Seleccionar</option>{paymentMethods.filter((method) => method.active).map((method) => <option key={method.id} value={method.id}>{method.name}</option>)}</select><input inputMode="decimal" placeholder="Importe" value={payment.amount} onChange={(event) => updatePayment(index, 'amount', event.target.value)} /><button className="link-btn danger" onClick={() => setPayments((current) => current.filter((_, paymentIndex) => paymentIndex !== index))}>Eliminar</button></div>)}<button className="secondary" onClick={() => setPayments((current) => [...current, { payment_method_id: '', amount: '' }])}>Agregar medio de pago</button><p className={Math.abs(total - paid) < 0.01 ? 'payment-ok' : 'payment-pending'}>{Math.abs(total - paid) < 0.01 ? 'Importe completo.' : `Falta asignar ${money(total - paid)}.`}</p></div><label>Notas<textarea rows="3" value={notes} onChange={(event) => setNotes(event.target.value)} /></label><div className="modal-actions"><button type="button" className="secondary" disabled={!hasSaleDraft || saving} onClick={cancelSaleDraft}>Cancelar venta</button><button className="primary finish-sale" disabled={saving} onClick={submit}>{saving ? 'Registrando...' : 'Registrar venta'}</button></div></section>{receipt && <ReceiptModal receipt={receipt} onClose={() => setReceipt(null)} />}</div>
+  return <div className="sale-layout"><section className="panel product-picker"><h2>Productos</h2><label>Filtrar por marca<select value={saleBrandId} onChange={(event) => setSaleBrandId(event.target.value)}><option value="">Todas las marcas</option>{brands.map((brand) => <option key={brand.id} value={brand.id}>{brand.name}</option>)}</select></label><SearchBox value={search} setValue={setSearch} placeholder="Buscar producto" />{visible.map((product) => <button key={product.id} className="product-option" onClick={() => add(product)}><span><strong>{product.name}</strong><small>{product.sku || 'Sin código'} · {product.brands?.name || 'Sin marca'} · Stock: {product.stock}</small></span><b>{money(getProductPrice(product))}</b></button>)}</section><section className="panel"><div className="panel-header"><h2>Comprobante de venta</h2><p>La lista del cliente se aplica automáticamente. También podés aplicar descuentos por producto.</p></div><div className="form-grid"><label>Cliente<select value={customerId} onChange={(event) => changeCustomer(event.target.value)}><option value="">Consumidor final</option>{customers.map((customer) => <option value={customer.id} key={customer.id}>{customer.name}</option>)}</select></label><label>Lista de precios<select value={priceListId} onChange={(event) => changePriceList(event.target.value)}><option value="">Precio de venta general</option>{activePriceLists.map((list) => <option key={list.id} value={list.id}>{list.name}{list.is_default ? ' · Predeterminada' : ''}</option>)}</select></label></div><div className="table-wrap"><table><thead><tr><th>Producto</th><th>Cantidad</th><th>Precio</th><th>Desc. %</th><th>Total línea</th><th></th></tr></thead><tbody>{cart.map((item, index) => <tr key={item.product_id}><td>{item.product_name}</td><td><input className="small-input" inputMode="decimal" value={item.quantity} onChange={(event) => updateCart(index, 'quantity', event.target.value)} /></td><td><input className="price-input" inputMode="decimal" value={item.unit_price} onChange={(event) => updateCart(index, 'unit_price', event.target.value)} /></td><td><input className="small-input" inputMode="decimal" placeholder="0" value={item.discount_percent} onChange={(event) => updateCart(index, 'discount_percent', event.target.value)} /></td><td>{money(lineTotal(item))}</td><td><button className="link-btn danger" onClick={() => setCart((current) => current.filter((_, itemIndex) => itemIndex !== index))}>Quitar</button></td></tr>)}</tbody></table></div><div className="total-row"><span>Subtotal sin ajustes</span><strong>{money(subtotal)}</strong></div>{discountAmount > 0 && <div className="total-row"><span>Descuentos aplicados</span><strong>- {money(discountAmount)}</strong></div>}<div className="total-row"><span>Total final</span><strong>{money(total)}</strong></div><div className="payments"><h3>Medios de pago</h3>{payments.map((payment, index) => <div className="payment-row" key={index}><select value={payment.payment_method_id} onChange={(event) => updatePayment(index, 'payment_method_id', event.target.value)}><option value="">Seleccionar</option>{paymentMethods.filter((method) => method.active).map((method) => <option key={method.id} value={method.id}>{method.name}</option>)}</select><input inputMode="decimal" placeholder="Importe" value={payment.amount} onChange={(event) => updatePayment(index, 'amount', event.target.value)} /><button className="link-btn danger" onClick={() => setPayments((current) => current.filter((_, paymentIndex) => paymentIndex !== index))}>Eliminar</button></div>)}<button className="secondary" onClick={() => setPayments((current) => [...current, { payment_method_id: '', amount: '' }])}>Agregar medio de pago</button><p className={Math.abs(total - paid) < 0.01 ? 'payment-ok' : 'payment-pending'}>{Math.abs(total - paid) < 0.01 ? 'Importe completo.' : `Falta asignar ${money(total - paid)}.`}</p></div><label>Notas<textarea rows="3" value={notes} onChange={(event) => setNotes(event.target.value)} /></label><div className="modal-actions"><button type="button" className="secondary" disabled={!hasSaleDraft || saving} onClick={cancelSaleDraft}>Cancelar venta</button><button className="primary finish-sale" disabled={saving} onClick={submit}>{saving ? 'Registrando...' : 'Registrar venta'}</button></div></section>{receipt && <ReceiptModal receipt={receipt} accountMovements={accountMovements} onClose={() => setReceipt(null)} />}</div>
 }
 
 function Accounts({ customers, sales, paymentMethods, accountMovements, refresh, flash, setError, setInvoiceGuard }) {
@@ -1108,7 +1118,7 @@ function Stock({ products, brands, providers, purchases, stockMovements, payment
   return <div className="stack">
     <section className="panel"><div className="panel-header split"><div><h2>Stock actual</h2><p>La venta puede dejar unidades negativas. Los ingresos posteriores recomponen el stock automáticamente.</p></div><div className="button-row"><button className="secondary" onClick={() => setShowAdjustment(true)}>Ajuste manual</button><button className="primary" onClick={() => setShowPurchase(true)}><FilePlus2 size={17} />Cargar factura de compra</button></div></div><div className="table-wrap"><table><thead><tr><th>Producto</th><th>Marca</th><th>Stock</th><th>Mínimo</th><th>Estado</th></tr></thead><tbody>{products.filter((product) => product.active).map((product) => <tr key={product.id}><td><strong>{product.name}</strong><small>{product.sku || 'Sin código'}</small></td><td>{product.brands?.name || '-'}</td><td>{product.stock}</td><td>{product.min_stock}</td><td><span className={Number(product.stock) < 0 ? 'badge danger-badge' : Number(product.stock) <= Number(product.min_stock) ? 'badge warning' : 'badge'}>{Number(product.stock) < 0 ? 'Stock negativo' : Number(product.stock) <= Number(product.min_stock) ? 'Stock bajo' : 'Disponible'}</span></td></tr>)}</tbody></table></div></section>
 
-    <section className="panel"><div className="panel-header"><h2>Últimas facturas de compra</h2><p>El historial completo está disponible desde el menú lateral.</p></div>{purchases.length === 0 ? <Empty text="No hay facturas de compra cargadas." /> : <div className="table-wrap"><table><thead><tr><th>Fecha</th><th>Número</th><th>Proveedor</th><th>Total</th><th>Pagado</th><th>Debe</th><th>Estado</th><th></th></tr></thead><tbody>{purchases.slice(0, 15).map((row) => <tr key={row.id}><td>{row.invoice_date || '-'}</td><td>{row.invoice_number || `Ingreso #${row.purchase_number}`}</td><td>{row.providers?.name || '-'}</td><td>{money(row.total)}</td><td>{money(row.paid_amount)}</td><td>{money(row.outstanding_amount)}</td><td><Status value={row.payment_status} /></td><td className="actions"><button className="link-btn" onClick={() => setViewPurchase(row)}>Ver</button>{row.payment_status !== 'cancelled' && <button className="link-btn danger" onClick={() => voidPurchase(row)}>Cancelar</button>}</td></tr>)}</tbody></table></div>}</section>
+    <section className="panel"><div className="panel-header"><h2>Últimas facturas de compra</h2><p>El historial completo está disponible desde el menú lateral.</p></div>{purchases.length === 0 ? <Empty text="No hay facturas de compra cargadas." /> : <div className="table-wrap"><table><thead><tr><th>Fecha</th><th>Número</th><th>Proveedor</th><th>Total</th><th>Pagado</th><th>Debe</th><th>Estado</th><th></th></tr></thead><tbody>{purchases.slice(0, 15).map((row) => <tr key={row.id}><td>{row.invoice_date || '-'}</td><td>{row.invoice_number || `Ingreso #${row.purchase_number}`}</td><td>{row.providers?.name || '-'}</td><td>{money(row.total)}</td><td>{money(row.paid_amount)}</td><td>{money(row.outstanding_amount)}</td><td><Status value={row.payment_status} /></td><td className="actions"><button className="link-btn" onClick={() => setViewPurchase(row)}>Ver</button>{row.payment_status !== 'cancelled' && <button className="link-btn danger" onClick={() => voidPurchase(row)}>Cancelar factura</button>}</td></tr>)}</tbody></table></div>}</section>
 
     <section className="panel"><div className="panel-header"><h2>Últimos movimientos de stock</h2></div>{stockMovements.length === 0 ? <Empty text="Todavía no hay movimientos." /> : <div className="table-wrap"><table><thead><tr><th>Fecha</th><th>Producto</th><th>Tipo</th><th>Cantidad</th><th>Notas</th><th></th></tr></thead><tbody>{stockMovements.map((movement) => <tr key={movement.id}><td>{dateTime(movement.created_at)}</td><td>{movement.products?.name || movement.product_name || '-'}</td><td>{stockLabel(movement.movement_type)}</td><td className={Number(movement.quantity) >= 0 ? 'amount-paid' : 'amount-debt'}>{Number(movement.quantity) > 0 ? '+' : ''}{movement.quantity}</td><td>{movement.notes || '-'}</td><td className="actions">{movement.movement_type === 'manual_adjustment' && !movement.purchase_id && <button className="link-btn danger" onClick={() => deleteMovement(movement.id)}>Eliminar</button>}</td></tr>)}</tbody></table></div>}</section>
 
@@ -1177,7 +1187,7 @@ function ProviderAccounts({ providers, purchases, paymentMethods, providerAccoun
 }
 
 
-function History({ sales, refresh, flash, setError }) {
+function History({ sales, accountMovements, refresh, flash, setError }) {
   const [selectedSale, setSelectedSale] = useState(null)
 
   async function voidSale(sale) {
@@ -1210,7 +1220,7 @@ function History({ sales, refresh, flash, setError }) {
       <div className="panel-header">
         <div>
           <h2>Historial de ventas</h2>
-          <p>Consultá comprobantes activos y cancelados, reimprimilos o anulá ventas cuando corresponda.</p>
+          <p>Consultá comprobantes activos y cancelados, reimprimilos o cancelá ventas ya hechas cuando corresponda.</p>
         </div>
       </div>
 
@@ -1254,7 +1264,7 @@ function History({ sales, refresh, flash, setError }) {
                         className="link-btn danger"
                         onClick={() => voidSale(sale)}
                       >
-                        Cancelar
+                        Cancelar factura
                       </button>
                     )}
                   </td>
@@ -1268,6 +1278,7 @@ function History({ sales, refresh, flash, setError }) {
       {selectedSale && (
         <ReceiptModal
           receipt={selectedSale}
+          accountMovements={accountMovements}
           onClose={() => setSelectedSale(null)}
         />
       )}
@@ -1289,7 +1300,7 @@ function PurchaseHistory({ purchases, refresh, flash, setError, setInvoiceGuard 
     refresh()
   }
 
-  return <section className="panel"><div className="panel-header"><h2>Historial de facturas de compra</h2><p>Consultá facturas activas, canceladas, importes pagados, saldos pendientes y detalle de mercadería ingresada.</p></div>{purchases.length === 0 ? <Empty text="Todavía no hay facturas de compra." /> : <div className="table-wrap"><table><thead><tr><th>Fecha</th><th>Número</th><th>Proveedor</th><th>Total</th><th>Pagado</th><th>Debe</th><th>Estado</th><th></th></tr></thead><tbody>{purchases.map((row) => <tr key={row.id} className={row.payment_status === 'cancelled' ? 'muted-row' : ''}><td>{row.invoice_date || '-'}</td><td>{row.invoice_number || `Ingreso #${row.purchase_number}`}</td><td>{row.providers?.name || '-'}</td><td>{money(row.total)}</td><td>{money(row.paid_amount)}</td><td>{money(row.outstanding_amount)}</td><td><Status value={row.payment_status} /></td><td className="actions"><button className="link-btn" onClick={() => setPurchase(row)}>Ver</button>{row.payment_status !== 'cancelled' && <button className="link-btn danger" onClick={() => voidPurchase(row)}>Cancelar</button>}</td></tr>)}</tbody></table></div>}{purchase && <PurchaseReceiptModal purchase={purchase} onClose={() => setPurchase(null)} />}</section>
+  return <section className="panel"><div className="panel-header"><h2>Historial de facturas de compra</h2><p>Consultá facturas activas y canceladas, o cancelá compras ya hechas para revertir stock y cuenta corriente.</p></div>{purchases.length === 0 ? <Empty text="Todavía no hay facturas de compra." /> : <div className="table-wrap"><table><thead><tr><th>Fecha</th><th>Número</th><th>Proveedor</th><th>Total</th><th>Pagado</th><th>Debe</th><th>Estado</th><th></th></tr></thead><tbody>{purchases.map((row) => <tr key={row.id} className={row.payment_status === 'cancelled' ? 'muted-row' : ''}><td>{row.invoice_date || '-'}</td><td>{row.invoice_number || `Ingreso #${row.purchase_number}`}</td><td>{row.providers?.name || '-'}</td><td>{money(row.total)}</td><td>{money(row.paid_amount)}</td><td>{money(row.outstanding_amount)}</td><td><Status value={row.payment_status} /></td><td className="actions"><button className="link-btn" onClick={() => setPurchase(row)}>Ver</button>{row.payment_status !== 'cancelled' && <button className="link-btn danger" onClick={() => voidPurchase(row)}>Cancelar factura</button>}</td></tr>)}</tbody></table></div>}{purchase && <PurchaseReceiptModal purchase={purchase} onClose={() => setPurchase(null)} />}</section>
 }
 
 function PurchaseReceiptModal({ purchase, onClose }) {
@@ -1306,8 +1317,17 @@ function PurchaseReceiptModal({ purchase, onClose }) {
 
   return <Modal wide title={`Factura de compra ${purchase.invoice_number || `#${purchase.purchase_number}`}`} onClose={onClose}><div className="receipt"><div className="receipt-header"><h2>{purchase.payment_status === 'cancelled' ? 'Factura de compra cancelada' : 'Factura de compra'}</h2><p>Registro interno de ingreso de mercadería</p></div><div className="receipt-meta"><span><b>Número:</b> {purchase.invoice_number || `Ingreso #${purchase.purchase_number}`}</span><span><b>Fecha:</b> {purchase.invoice_date || '-'}</span><span className="receipt-customer"><b>Proveedor / marca:</b> <span className="receipt-customer-name">{purchase.providers?.name || 'Sin especificar'}</span></span><span><b>Estado:</b> {statusLabel(purchase.payment_status)}</span>{purchase.cancelled_at && <span><b>Cancelada el:</b> {dateTime(purchase.cancelled_at)}</span>}</div>{purchase.payment_status === 'cancelled' && <div className="alert warning">Factura cancelada. El stock ingresado fue descontado y la cuenta corriente del proveedor fue corregida.{purchase.cancelled_reason ? ` Motivo: ${purchase.cancelled_reason}` : ''}</div>}<DataTable headers={['Producto', 'Cantidad', 'Costo', 'Subtotal base', 'Descuento', 'Total línea']} rows={(purchase.purchase_items || []).map((item) => [item.product_name, item.quantity, money(item.unit_cost), money(item.base_subtotal ?? item.subtotal), purchaseItemAdjustmentText(item, 'discount'), money(item.subtotal)])} /><div className="receipt-total">Subtotal sin ajustes: {money(subtotal)}</div>{discountAmount > 0 && <div className="receipt-total">Descuentos por producto: - {money(discountAmount)}</div>}<div className="receipt-total">Precio antes de bonificación e IVA: {money(afterDiscounts)}</div>{bonusAmount > 0 && <div className="receipt-total">{bonusLabel}: - {money(bonusAmount)}</div>}<div className="receipt-total">Precio luego de bonificación: {money(afterBonus)}</div>{vatAmount > 0 && <div className="receipt-total">IVA ({purchase.vat_percent || 0}%): + {money(vatAmount)}</div>}{historicalSurcharge > 0 && <div className="receipt-total">Recargo histórico aplicado: + {money(historicalSurcharge)}</div>}<div className="receipt-total">Precio final: {money(purchase.total)}</div><div className="receipt-payments"><span>Pagado: {money(purchase.paid_amount)}</span><span>Saldo pendiente: {money(purchase.outstanding_amount)}</span>{purchase.payment_methods?.name && <span>Pago inicial: {purchase.payment_methods.name}</span>}</div>{purchase.notes && <p><b>Notas:</b> {purchase.notes}</p>}</div><div className="modal-actions"><button className="secondary" onClick={onClose}>Cerrar</button><button className="primary" onClick={() => window.print()}><Printer size={17} />Imprimir</button></div></Modal>
 }
-function ReceiptModal({ receipt, onClose }) {
+function ReceiptModal({ receipt, accountMovements = [], onClose }) {
   const isCancelled = receipt.payment_status === 'cancelled'
+  const customerId = receipt.customer_id || receipt.customers?.id || null
+  const accountBalanceFromMovements = customerId
+    ? accountMovements
+      .filter((movement) => movement.customer_id === customerId)
+      .reduce((sum, movement) => sum + Number(movement.amount || 0), 0)
+    : 0
+  const customerAccountBalance = customerId
+    ? roundCurrency(receipt.customer_account_balance ?? accountBalanceFromMovements)
+    : 0
 
   return <Modal wide title={`Comprobante #${receipt.receipt_number}`} onClose={onClose}>
     <div className="receipt sale-receipt">
@@ -1357,7 +1377,8 @@ function ReceiptModal({ receipt, onClose }) {
         ))}
       </div>
 
-      {Number(receipt.outstanding_amount || 0) > 0 && <p><b>Saldo pendiente:</b> {money(receipt.outstanding_amount)}</p>}
+      {customerId && <p><b>Saldo pendiente total del cliente:</b> {money(customerAccountBalance)}</p>}
+      {Number(receipt.outstanding_amount || 0) > 0 && <p><b>Saldo de esta venta:</b> {money(receipt.outstanding_amount)}</p>}
       {receipt.notes && <p><b>Notas:</b> {receipt.notes}</p>}
     </div>
 
