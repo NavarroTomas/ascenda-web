@@ -66,7 +66,7 @@ const NAV_ITEMS = [
   { id: 'configuracion', label: 'Configuración', icon: '⚙' },
 ]
 
-const SIMPLE_NAV_IDS = new Set(['inicio', 'recordatorios', 'tareas', 'habitos', 'finanzas', 'avisos', 'perfil', 'configuracion'])
+const SIMPLE_NAV_IDS = new Set(['inicio', 'agenda', 'recordatorios', 'tareas', 'habitos', 'finanzas', 'avisos', 'perfil', 'configuracion'])
 const DEFAULT_SETTINGS = {
   experience_mode: 'standard', theme: 'dark', visual_theme: 'standard', reduce_motion: false, high_contrast: false,
   color_vision_mode: 'default', penalties_enabled: true, custom_quote: null, sidebar_collapsed: false,

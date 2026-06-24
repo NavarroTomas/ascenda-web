@@ -3,7 +3,7 @@ export default function SimpleHomeView({ displayName, summary, todayPlan, tasks 
   const pendingHabits = habits.filter((habit) => !habitLogs.some((log) => log.habit_id === habit.id && log.log_date === today)).slice(0, 4)
   const reminderCount = Number(summary?.remindersToday?.length || 0)
   const eventCount = Number(summary?.eventsToday?.length || 0)
-  const total = essentialTasks.length + pendingHabits.length + reminderCount
+  const total = essentialTasks.length + pendingHabits.length + reminderCount + eventCount
   const firstName = displayName?.split(' ')[0] || 'Usuario'
 
   return (
@@ -67,6 +67,7 @@ export default function SimpleHomeView({ displayName, summary, todayPlan, tasks 
         </article>
 
         <section className="simple-shortcuts panel">
+          <button type="button" onClick={() => navigate?.('agenda')}>Agenda</button>
           <button type="button" onClick={() => navigate?.('recordatorios')}>Recordatorios</button>
           <button type="button" onClick={() => navigate?.('habitos')}>Hábitos</button>
           <button type="button" onClick={() => navigate?.('finanzas')}>Finanzas</button>
