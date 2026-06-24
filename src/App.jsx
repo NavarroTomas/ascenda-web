@@ -53,13 +53,13 @@ const sections = [
   ['history', 'Historial de ventas', CircleDollarSign],
 ]
 
-const CURRENT_UPDATE_VERSION = 'v25-anular-compras'
+const CURRENT_UPDATE_VERSION = 'v25-cancelar-compras'
 const CURRENT_UPDATE_TITLE = 'Actualización V25'
 const CURRENT_UPDATE_ITEMS = [
-  'Ahora las facturas de compra se pueden anular sin eliminarlas del historial.',
-  'Al anular una compra, el sistema descuenta del stock la mercadería ingresada.',
-  'La cuenta corriente del proveedor se corrige automáticamente y la factura queda en estado Anulada.',
-  'El historial conserva la factura anulada con fecha y motivo de anulación.',
+  'Ahora las facturas de compra se pueden cancelar sin eliminarlas del historial.',
+  'Al cancelar una compra, el sistema descuenta del stock la mercadería ingresada.',
+  'La cuenta corriente del proveedor se corrige automáticamente y la factura queda en estado Cancelada.',
+  'El historial conserva la factura cancelada con fecha y motivo de cancelación.',
 ]
 
 function App() {
@@ -951,7 +951,7 @@ function Accounts({ customers, sales, paymentMethods, accountMovements, refresh,
   const [showPayment, setShowPayment] = useState(false); const [showAdjustment, setShowAdjustment] = useState(false)
   const [payment, setPayment] = useState({ amount: '', payment_method_id: '', notes: '' }); const [adjustment, setAdjustment] = useState({ amount: '', notes: '' })
   useEffect(() => { if (customerId) localStorage.setItem('selectedCustomerAccount', customerId) }, [customerId])
-  const movements = accountMovements.filter((m) => m.customer_id === customerId); const balance = movements.reduce((sum, m) => sum + Number(m.amount), 0); const openSales = sales.filter((sale) => sale.customer_id === customerId && Number(sale.outstanding_amount) > 0)
+  const movements = accountMovements.filter((m) => m.customer_id === customerId); const balance = movements.reduce((sum, m) => sum + Number(m.amount), 0); const openSales = sales.filter((sale) => sale.customer_id === customerId && sale.payment_status !== 'cancelled' && Number(sale.outstanding_amount) > 0)
   async function registerPayment(event) { event.preventDefault(); const { error } = await supabase.rpc('register_customer_payment', { p_customer_id: customerId, p_amount: safeNumber(payment.amount), p_payment_method_id: payment.payment_method_id || null, p_notes: payment.notes || null }); if (error) return setError(error.message); setPayment({ amount: '', payment_method_id: '', notes: '' }); setShowPayment(false); flash('Cobro registrado.'); refresh() }
   async function registerAdjustment(event) { event.preventDefault(); const { error } = await supabase.rpc('register_account_adjustment', { p_customer_id: customerId, p_amount: safeNumber(adjustment.amount), p_notes: adjustment.notes || null }); if (error) return setError(error.message); setAdjustment({ amount: '', notes: '' }); setShowAdjustment(false); flash('Ajuste registrado.'); refresh() }
   async function removeMovement(id) { if (!window.confirm('¿Eliminar este movimiento de cuenta corriente? Si era un cobro se reabrirán los saldos correspondientes.')) return; const { error } = await supabase.rpc('delete_account_movement', { p_movement_id: id }); if (error) return setError(error.message); flash('Movimiento eliminado.'); refresh() }
@@ -1079,11 +1079,11 @@ function Stock({ products, brands, providers, purchases, stockMovements, payment
   async function voidPurchase(row) {
     if (row.payment_status === 'cancelled') return
     const label = row.invoice_number || `Ingreso #${row.purchase_number}`
-    const reason = window.prompt(`¿Seguro que querés anular la factura de compra ${label}?\n\nSe va a descontar del stock la mercadería ingresada y se va a corregir la cuenta corriente del proveedor.\n\nMotivo de anulación (opcional):`)
+    const reason = window.prompt(`¿Seguro que querés cancelar la factura de compra ${label}?\n\nSe va a descontar del stock la mercadería ingresada y se va a corregir la cuenta corriente del proveedor.\n\nMotivo de cancelación (opcional):`)
     if (reason === null) return
     const { error } = await supabase.rpc('void_purchase', { p_purchase_id: row.id, p_reason: reason.trim() || null })
     if (error) return setError(error.message)
-    flash('Factura de compra anulada. Stock y cuenta del proveedor corregidos.')
+    flash('Factura de compra cancelada. Stock y cuenta del proveedor corregidos.')
     refresh()
   }
 
@@ -1108,7 +1108,7 @@ function Stock({ products, brands, providers, purchases, stockMovements, payment
   return <div className="stack">
     <section className="panel"><div className="panel-header split"><div><h2>Stock actual</h2><p>La venta puede dejar unidades negativas. Los ingresos posteriores recomponen el stock automáticamente.</p></div><div className="button-row"><button className="secondary" onClick={() => setShowAdjustment(true)}>Ajuste manual</button><button className="primary" onClick={() => setShowPurchase(true)}><FilePlus2 size={17} />Cargar factura de compra</button></div></div><div className="table-wrap"><table><thead><tr><th>Producto</th><th>Marca</th><th>Stock</th><th>Mínimo</th><th>Estado</th></tr></thead><tbody>{products.filter((product) => product.active).map((product) => <tr key={product.id}><td><strong>{product.name}</strong><small>{product.sku || 'Sin código'}</small></td><td>{product.brands?.name || '-'}</td><td>{product.stock}</td><td>{product.min_stock}</td><td><span className={Number(product.stock) < 0 ? 'badge danger-badge' : Number(product.stock) <= Number(product.min_stock) ? 'badge warning' : 'badge'}>{Number(product.stock) < 0 ? 'Stock negativo' : Number(product.stock) <= Number(product.min_stock) ? 'Stock bajo' : 'Disponible'}</span></td></tr>)}</tbody></table></div></section>
 
-    <section className="panel"><div className="panel-header"><h2>Últimas facturas de compra</h2><p>El historial completo está disponible desde el menú lateral.</p></div>{purchases.length === 0 ? <Empty text="No hay facturas de compra cargadas." /> : <div className="table-wrap"><table><thead><tr><th>Fecha</th><th>Número</th><th>Proveedor</th><th>Total</th><th>Pagado</th><th>Debe</th><th>Estado</th><th></th></tr></thead><tbody>{purchases.slice(0, 15).map((row) => <tr key={row.id}><td>{row.invoice_date || '-'}</td><td>{row.invoice_number || `Ingreso #${row.purchase_number}`}</td><td>{row.providers?.name || '-'}</td><td>{money(row.total)}</td><td>{money(row.paid_amount)}</td><td>{money(row.outstanding_amount)}</td><td><Status value={row.payment_status} /></td><td className="actions"><button className="link-btn" onClick={() => setViewPurchase(row)}>Ver</button>{row.payment_status !== 'cancelled' && <button className="link-btn danger" onClick={() => voidPurchase(row)}>Anular</button>}</td></tr>)}</tbody></table></div>}</section>
+    <section className="panel"><div className="panel-header"><h2>Últimas facturas de compra</h2><p>El historial completo está disponible desde el menú lateral.</p></div>{purchases.length === 0 ? <Empty text="No hay facturas de compra cargadas." /> : <div className="table-wrap"><table><thead><tr><th>Fecha</th><th>Número</th><th>Proveedor</th><th>Total</th><th>Pagado</th><th>Debe</th><th>Estado</th><th></th></tr></thead><tbody>{purchases.slice(0, 15).map((row) => <tr key={row.id}><td>{row.invoice_date || '-'}</td><td>{row.invoice_number || `Ingreso #${row.purchase_number}`}</td><td>{row.providers?.name || '-'}</td><td>{money(row.total)}</td><td>{money(row.paid_amount)}</td><td>{money(row.outstanding_amount)}</td><td><Status value={row.payment_status} /></td><td className="actions"><button className="link-btn" onClick={() => setViewPurchase(row)}>Ver</button>{row.payment_status !== 'cancelled' && <button className="link-btn danger" onClick={() => voidPurchase(row)}>Cancelar</button>}</td></tr>)}</tbody></table></div>}</section>
 
     <section className="panel"><div className="panel-header"><h2>Últimos movimientos de stock</h2></div>{stockMovements.length === 0 ? <Empty text="Todavía no hay movimientos." /> : <div className="table-wrap"><table><thead><tr><th>Fecha</th><th>Producto</th><th>Tipo</th><th>Cantidad</th><th>Notas</th><th></th></tr></thead><tbody>{stockMovements.map((movement) => <tr key={movement.id}><td>{dateTime(movement.created_at)}</td><td>{movement.products?.name || movement.product_name || '-'}</td><td>{stockLabel(movement.movement_type)}</td><td className={Number(movement.quantity) >= 0 ? 'amount-paid' : 'amount-debt'}>{Number(movement.quantity) > 0 ? '+' : ''}{movement.quantity}</td><td>{movement.notes || '-'}</td><td className="actions">{movement.movement_type === 'manual_adjustment' && !movement.purchase_id && <button className="link-btn danger" onClick={() => deleteMovement(movement.id)}>Eliminar</button>}</td></tr>)}</tbody></table></div>}</section>
 
@@ -1143,7 +1143,7 @@ function ProviderAccounts({ providers, purchases, paymentMethods, providerAccoun
   useEffect(() => { if (providerId) localStorage.setItem('selectedProviderAccount', providerId) }, [providerId])
   const movements = providerAccountMovements.filter((movement) => movement.provider_id === providerId)
   const balance = roundCurrency(movements.reduce((sum, movement) => sum + Number(movement.amount), 0))
-  const openPurchases = purchases.filter((purchase) => purchase.provider_id === providerId && Number(purchase.outstanding_amount) > 0)
+  const openPurchases = purchases.filter((purchase) => purchase.provider_id === providerId && purchase.payment_status !== 'cancelled' && Number(purchase.outstanding_amount) > 0)
 
   async function registerPayment(event) {
     event.preventDefault()
@@ -1184,13 +1184,13 @@ function History({ sales, refresh, flash, setError }) {
     if (sale.payment_status === 'cancelled') return
 
     const confirmation = window.confirm(
-      `¿Seguro que querés anular la factura de venta #${sale.receipt_number}?\n\n` +
-      'Se repondrá el stock vendido y se corregirá la cuenta corriente del cliente si corresponde. La venta quedará visible como anulada.'
+      `¿Seguro que querés cancelar la factura de venta #${sale.receipt_number}?\n\n` +
+      'Se repondrá el stock vendido y se corregirá la cuenta corriente del cliente si corresponde. La venta quedará visible como cancelada.'
     )
 
     if (!confirmation) return
 
-    const reason = window.prompt('Motivo de anulación opcional:', '')
+    const reason = window.prompt('Motivo de cancelación opcional:', '')
     if (reason === null) return
 
     const { error } = await supabase.rpc('void_sale', {
@@ -1200,7 +1200,7 @@ function History({ sales, refresh, flash, setError }) {
 
     if (error) return setError(error.message)
 
-    flash('Factura de venta anulada correctamente.')
+    flash('Factura de venta cancelada correctamente.')
     setSelectedSale(null)
     refresh()
   }
@@ -1210,7 +1210,7 @@ function History({ sales, refresh, flash, setError }) {
       <div className="panel-header">
         <div>
           <h2>Historial de ventas</h2>
-          <p>Consultá comprobantes activos y anulados, reimprimilos o anulá ventas cuando corresponda.</p>
+          <p>Consultá comprobantes activos y cancelados, reimprimilos o anulá ventas cuando corresponda.</p>
         </div>
       </div>
 
@@ -1254,7 +1254,7 @@ function History({ sales, refresh, flash, setError }) {
                         className="link-btn danger"
                         onClick={() => voidSale(sale)}
                       >
-                        Anular
+                        Cancelar
                       </button>
                     )}
                   </td>
@@ -1281,15 +1281,15 @@ function PurchaseHistory({ purchases, refresh, flash, setError, setInvoiceGuard 
   async function voidPurchase(row) {
     if (row.payment_status === 'cancelled') return
     const label = row.invoice_number || `Ingreso #${row.purchase_number}`
-    const reason = window.prompt(`¿Seguro que querés anular la factura de compra ${label}?\n\nSe va a descontar del stock la mercadería ingresada y se va a corregir la cuenta corriente del proveedor.\n\nMotivo de anulación (opcional):`)
+    const reason = window.prompt(`¿Seguro que querés cancelar la factura de compra ${label}?\n\nSe va a descontar del stock la mercadería ingresada y se va a corregir la cuenta corriente del proveedor.\n\nMotivo de cancelación (opcional):`)
     if (reason === null) return
     const { error } = await supabase.rpc('void_purchase', { p_purchase_id: row.id, p_reason: reason.trim() || null })
     if (error) return setError(error.message)
-    flash('Factura de compra anulada. Stock y cuenta del proveedor corregidos.')
+    flash('Factura de compra cancelada. Stock y cuenta del proveedor corregidos.')
     refresh()
   }
 
-  return <section className="panel"><div className="panel-header"><h2>Historial de facturas de compra</h2><p>Consultá facturas activas, anuladas, importes pagados, saldos pendientes y detalle de mercadería ingresada.</p></div>{purchases.length === 0 ? <Empty text="Todavía no hay facturas de compra." /> : <div className="table-wrap"><table><thead><tr><th>Fecha</th><th>Número</th><th>Proveedor</th><th>Total</th><th>Pagado</th><th>Debe</th><th>Estado</th><th></th></tr></thead><tbody>{purchases.map((row) => <tr key={row.id} className={row.payment_status === 'cancelled' ? 'muted-row' : ''}><td>{row.invoice_date || '-'}</td><td>{row.invoice_number || `Ingreso #${row.purchase_number}`}</td><td>{row.providers?.name || '-'}</td><td>{money(row.total)}</td><td>{money(row.paid_amount)}</td><td>{money(row.outstanding_amount)}</td><td><Status value={row.payment_status} /></td><td className="actions"><button className="link-btn" onClick={() => setPurchase(row)}>Ver</button>{row.payment_status !== 'cancelled' && <button className="link-btn danger" onClick={() => voidPurchase(row)}>Anular</button>}</td></tr>)}</tbody></table></div>}{purchase && <PurchaseReceiptModal purchase={purchase} onClose={() => setPurchase(null)} />}</section>
+  return <section className="panel"><div className="panel-header"><h2>Historial de facturas de compra</h2><p>Consultá facturas activas, canceladas, importes pagados, saldos pendientes y detalle de mercadería ingresada.</p></div>{purchases.length === 0 ? <Empty text="Todavía no hay facturas de compra." /> : <div className="table-wrap"><table><thead><tr><th>Fecha</th><th>Número</th><th>Proveedor</th><th>Total</th><th>Pagado</th><th>Debe</th><th>Estado</th><th></th></tr></thead><tbody>{purchases.map((row) => <tr key={row.id} className={row.payment_status === 'cancelled' ? 'muted-row' : ''}><td>{row.invoice_date || '-'}</td><td>{row.invoice_number || `Ingreso #${row.purchase_number}`}</td><td>{row.providers?.name || '-'}</td><td>{money(row.total)}</td><td>{money(row.paid_amount)}</td><td>{money(row.outstanding_amount)}</td><td><Status value={row.payment_status} /></td><td className="actions"><button className="link-btn" onClick={() => setPurchase(row)}>Ver</button>{row.payment_status !== 'cancelled' && <button className="link-btn danger" onClick={() => voidPurchase(row)}>Cancelar</button>}</td></tr>)}</tbody></table></div>}{purchase && <PurchaseReceiptModal purchase={purchase} onClose={() => setPurchase(null)} />}</section>
 }
 
 function PurchaseReceiptModal({ purchase, onClose }) {
@@ -1304,7 +1304,7 @@ function PurchaseReceiptModal({ purchase, onClose }) {
     ? `Bonificación final (${purchase.bonus_percent}%)`
     : 'Bonificación histórica'
 
-  return <Modal wide title={`Factura de compra ${purchase.invoice_number || `#${purchase.purchase_number}`}`} onClose={onClose}><div className="receipt"><div className="receipt-header"><h2>{purchase.payment_status === 'cancelled' ? 'Factura de compra anulada' : 'Factura de compra'}</h2><p>Registro interno de ingreso de mercadería</p></div><div className="receipt-meta"><span><b>Número:</b> {purchase.invoice_number || `Ingreso #${purchase.purchase_number}`}</span><span><b>Fecha:</b> {purchase.invoice_date || '-'}</span><span className="receipt-customer"><b>Proveedor / marca:</b> <span className="receipt-customer-name">{purchase.providers?.name || 'Sin especificar'}</span></span><span><b>Estado:</b> {statusLabel(purchase.payment_status)}</span>{purchase.cancelled_at && <span><b>Anulada el:</b> {dateTime(purchase.cancelled_at)}</span>}</div>{purchase.payment_status === 'cancelled' && <div className="alert warning">Factura anulada. El stock ingresado fue descontado y la cuenta corriente del proveedor fue corregida.{purchase.cancelled_reason ? ` Motivo: ${purchase.cancelled_reason}` : ''}</div>}<DataTable headers={['Producto', 'Cantidad', 'Costo', 'Subtotal base', 'Descuento', 'Total línea']} rows={(purchase.purchase_items || []).map((item) => [item.product_name, item.quantity, money(item.unit_cost), money(item.base_subtotal ?? item.subtotal), purchaseItemAdjustmentText(item, 'discount'), money(item.subtotal)])} /><div className="receipt-total">Subtotal sin ajustes: {money(subtotal)}</div>{discountAmount > 0 && <div className="receipt-total">Descuentos por producto: - {money(discountAmount)}</div>}<div className="receipt-total">Precio antes de bonificación e IVA: {money(afterDiscounts)}</div>{bonusAmount > 0 && <div className="receipt-total">{bonusLabel}: - {money(bonusAmount)}</div>}<div className="receipt-total">Precio luego de bonificación: {money(afterBonus)}</div>{vatAmount > 0 && <div className="receipt-total">IVA ({purchase.vat_percent || 0}%): + {money(vatAmount)}</div>}{historicalSurcharge > 0 && <div className="receipt-total">Recargo histórico aplicado: + {money(historicalSurcharge)}</div>}<div className="receipt-total">Precio final: {money(purchase.total)}</div><div className="receipt-payments"><span>Pagado: {money(purchase.paid_amount)}</span><span>Saldo pendiente: {money(purchase.outstanding_amount)}</span>{purchase.payment_methods?.name && <span>Pago inicial: {purchase.payment_methods.name}</span>}</div>{purchase.notes && <p><b>Notas:</b> {purchase.notes}</p>}</div><div className="modal-actions"><button className="secondary" onClick={onClose}>Cerrar</button><button className="primary" onClick={() => window.print()}><Printer size={17} />Imprimir</button></div></Modal>
+  return <Modal wide title={`Factura de compra ${purchase.invoice_number || `#${purchase.purchase_number}`}`} onClose={onClose}><div className="receipt"><div className="receipt-header"><h2>{purchase.payment_status === 'cancelled' ? 'Factura de compra cancelada' : 'Factura de compra'}</h2><p>Registro interno de ingreso de mercadería</p></div><div className="receipt-meta"><span><b>Número:</b> {purchase.invoice_number || `Ingreso #${purchase.purchase_number}`}</span><span><b>Fecha:</b> {purchase.invoice_date || '-'}</span><span className="receipt-customer"><b>Proveedor / marca:</b> <span className="receipt-customer-name">{purchase.providers?.name || 'Sin especificar'}</span></span><span><b>Estado:</b> {statusLabel(purchase.payment_status)}</span>{purchase.cancelled_at && <span><b>Cancelada el:</b> {dateTime(purchase.cancelled_at)}</span>}</div>{purchase.payment_status === 'cancelled' && <div className="alert warning">Factura cancelada. El stock ingresado fue descontado y la cuenta corriente del proveedor fue corregida.{purchase.cancelled_reason ? ` Motivo: ${purchase.cancelled_reason}` : ''}</div>}<DataTable headers={['Producto', 'Cantidad', 'Costo', 'Subtotal base', 'Descuento', 'Total línea']} rows={(purchase.purchase_items || []).map((item) => [item.product_name, item.quantity, money(item.unit_cost), money(item.base_subtotal ?? item.subtotal), purchaseItemAdjustmentText(item, 'discount'), money(item.subtotal)])} /><div className="receipt-total">Subtotal sin ajustes: {money(subtotal)}</div>{discountAmount > 0 && <div className="receipt-total">Descuentos por producto: - {money(discountAmount)}</div>}<div className="receipt-total">Precio antes de bonificación e IVA: {money(afterDiscounts)}</div>{bonusAmount > 0 && <div className="receipt-total">{bonusLabel}: - {money(bonusAmount)}</div>}<div className="receipt-total">Precio luego de bonificación: {money(afterBonus)}</div>{vatAmount > 0 && <div className="receipt-total">IVA ({purchase.vat_percent || 0}%): + {money(vatAmount)}</div>}{historicalSurcharge > 0 && <div className="receipt-total">Recargo histórico aplicado: + {money(historicalSurcharge)}</div>}<div className="receipt-total">Precio final: {money(purchase.total)}</div><div className="receipt-payments"><span>Pagado: {money(purchase.paid_amount)}</span><span>Saldo pendiente: {money(purchase.outstanding_amount)}</span>{purchase.payment_methods?.name && <span>Pago inicial: {purchase.payment_methods.name}</span>}</div>{purchase.notes && <p><b>Notas:</b> {purchase.notes}</p>}</div><div className="modal-actions"><button className="secondary" onClick={onClose}>Cerrar</button><button className="primary" onClick={() => window.print()}><Printer size={17} />Imprimir</button></div></Modal>
 }
 function ReceiptModal({ receipt, onClose }) {
   const isCancelled = receipt.payment_status === 'cancelled'
@@ -1312,7 +1312,7 @@ function ReceiptModal({ receipt, onClose }) {
   return <Modal wide title={`Comprobante #${receipt.receipt_number}`} onClose={onClose}>
     <div className="receipt sale-receipt">
       <div className="receipt-header">
-        <h2>{isCancelled ? 'Comprobante anulado' : 'Comprobante interno'}</h2>
+        <h2>{isCancelled ? 'Comprobante cancelado' : 'Comprobante interno'}</h2>
         <p>No válido como factura fiscal</p>
       </div>
 
@@ -1323,12 +1323,12 @@ function ReceiptModal({ receipt, onClose }) {
         {(receipt.customer_address || receipt.customers?.address) && <span className="receipt-address"><b>Domicilio:</b> <span>{receipt.customer_address || receipt.customers?.address}</span></span>}
         <span><b>Lista de precios:</b> {receipt.price_list_name || 'Precio de venta general'}</span>
         <span><b>Estado:</b> {statusLabel(receipt.payment_status)}</span>
-        {receipt.cancelled_at && <span><b>Anulada el:</b> {dateTime(receipt.cancelled_at)}</span>}
+        {receipt.cancelled_at && <span><b>Cancelada el:</b> {dateTime(receipt.cancelled_at)}</span>}
       </div>
 
       {isCancelled && (
         <div className="alert warning">
-          Factura de venta anulada. El stock vendido fue repuesto y la cuenta corriente del cliente fue corregida.
+          Factura de venta cancelada. El stock vendido fue repuesto y la cuenta corriente del cliente fue corregida.
           {receipt.cancelled_reason ? ` Motivo: ${receipt.cancelled_reason}` : ''}
         </div>
       )}
@@ -1637,9 +1637,9 @@ function DataTable({ headers, rows, className = '' }) { return <div className="t
 function Centered({ text }) { return <div className="centered">{text}</div> }
 function Modal({ title, onClose, children, wide = false }) { return <div className="modal-backdrop"><div className={wide ? 'modal wide-modal' : 'modal'}><div className="modal-header"><h2>{title}</h2><button className="icon-btn" onClick={onClose}><X size={20} /></button></div>{children}</div></div> }
 function Status({ value }) { return <span className={value === 'paid' ? 'badge' : value === 'partial' ? 'badge warning' : value === 'cancelled' ? 'badge danger-badge' : 'badge danger-badge'}>{statusLabel(value)}</span> }
-function statusLabel(value) { return value === 'paid' ? 'Pagado' : value === 'partial' ? 'Pago parcial' : value === 'cancelled' ? 'Anulada' : 'Pendiente' }
+function statusLabel(value) { return value === 'paid' ? 'Pagado' : value === 'partial' ? 'Pago parcial' : value === 'cancelled' ? 'Cancelada' : 'Pendiente' }
 function movementLabel(value) { return value === 'sale_debt' ? 'Compra adeudada' : value === 'payment' ? 'Cobro recibido' : 'Ajuste manual' }
-function stockLabel(value) { return value === 'sale' ? 'Venta' : value === 'sale_void' ? 'Anulación de venta' : value === 'purchase' ? 'Ingreso por compra' : value === 'manual_adjustment' ? 'Ajuste manual' : 'Carga inicial' }
+function stockLabel(value) { return value === 'sale' ? 'Venta' : value === 'sale_void' ? 'Cancelación de venta' : value === 'purchase' ? 'Ingreso por compra' : value === 'manual_adjustment' ? 'Ajuste manual' : 'Carga inicial' }
 function providerMovementLabel(value) { return value === 'purchase_debt' ? 'Factura adeudada' : value === 'payment' ? 'Pago realizado' : 'Ajuste manual' }
 function roundCurrency(value) { return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100 }
 function adjustmentText(record) { const parts = []; if (Number(record.discount_amount || 0) > 0) parts.push(`-${money(record.discount_amount)}`); if (Number(record.surcharge_amount || 0) > 0) parts.push(`+${money(record.surcharge_amount)}`); return parts.length ? parts.join(' · ') : '-' }
