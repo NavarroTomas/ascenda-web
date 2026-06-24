@@ -243,7 +243,7 @@ function MonthlyBalance({ sales, purchases, products }) {
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7))
   const productMap = useMemo(() => new Map(products.map((product) => [product.id, product])), [products])
 
-  const monthSales = sales.filter((sale) => String(sale.created_at || '').slice(0, 7) === month)
+  const monthSales = sales.filter((sale) => sale.payment_status !== 'cancelled' && String(sale.created_at || '').slice(0, 7) === month)
   const monthPurchases = purchases.filter((purchase) => purchase.payment_status !== 'cancelled' && String(purchase.invoice_date || purchase.created_at || '').slice(0, 7) === month)
   const saleItems = monthSales.flatMap((sale) => (sale.sale_items || sale.items || []).map((item) => ({ ...item, sale })))
 
@@ -338,7 +338,7 @@ function MonthlyBalance({ sales, purchases, products }) {
 function Dashboard({ products, brands, customers, sales, accountMovements, setSection }) {
   const [stockBrandId, setStockBrandId] = useState('')
   const today = new Date().toISOString().slice(0, 10)
-  const todaySales = sales.filter((sale) => sale.created_at.slice(0, 10) === today)
+  const todaySales = sales.filter((sale) => sale.payment_status !== 'cancelled' && sale.created_at.slice(0, 10) === today)
   const todayTotal = todaySales.reduce((sum, sale) => sum + Number(sale.total), 0)
   const activeProducts = products.filter((product) => product.active)
   const lowStock = activeProducts.filter((product) => Number(product.stock) <= Number(product.min_stock))
@@ -1177,15 +1177,40 @@ function ProviderAccounts({ providers, purchases, paymentMethods, providerAccoun
 }
 
 
-function History({ sales }) {
+function History({ sales, refresh, flash, setError }) {
   const [selectedSale, setSelectedSale] = useState(null)
+
+  async function voidSale(sale) {
+    if (sale.payment_status === 'cancelled') return
+
+    const confirmation = window.confirm(
+      `¿Seguro que querés anular la factura de venta #${sale.receipt_number}?\n\n` +
+      'Se repondrá el stock vendido y se corregirá la cuenta corriente del cliente si corresponde. La venta quedará visible como anulada.'
+    )
+
+    if (!confirmation) return
+
+    const reason = window.prompt('Motivo de anulación opcional:', '')
+    if (reason === null) return
+
+    const { error } = await supabase.rpc('void_sale', {
+      p_sale_id: sale.id,
+      p_reason: reason.trim() || null,
+    })
+
+    if (error) return setError(error.message)
+
+    flash('Factura de venta anulada correctamente.')
+    setSelectedSale(null)
+    refresh()
+  }
 
   return (
     <section className="panel">
       <div className="panel-header">
         <div>
           <h2>Historial de ventas</h2>
-          <p>Consultá comprobantes anteriores y volvé a imprimirlos cuando sea necesario.</p>
+          <p>Consultá comprobantes activos y anulados, reimprimilos o anulá ventas cuando corresponda.</p>
         </div>
       </div>
 
@@ -1209,7 +1234,7 @@ function History({ sales }) {
 
             <tbody>
               {sales.map((sale) => (
-                <tr key={sale.id}>
+                <tr key={sale.id} className={sale.payment_status === 'cancelled' ? 'muted-row' : ''}>
                   <td>{dateTime(sale.created_at)}</td>
                   <td>#{sale.receipt_number}</td>
                   <td>{sale.customers?.name || 'Consumidor final'}</td>
@@ -1224,6 +1249,14 @@ function History({ sales }) {
                     >
                       Ver / imprimir
                     </button>
+                    {sale.payment_status !== 'cancelled' && (
+                      <button
+                        className="link-btn danger"
+                        onClick={() => voidSale(sale)}
+                      >
+                        Anular
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -1273,7 +1306,67 @@ function PurchaseReceiptModal({ purchase, onClose }) {
 
   return <Modal wide title={`Factura de compra ${purchase.invoice_number || `#${purchase.purchase_number}`}`} onClose={onClose}><div className="receipt"><div className="receipt-header"><h2>{purchase.payment_status === 'cancelled' ? 'Factura de compra anulada' : 'Factura de compra'}</h2><p>Registro interno de ingreso de mercadería</p></div><div className="receipt-meta"><span><b>Número:</b> {purchase.invoice_number || `Ingreso #${purchase.purchase_number}`}</span><span><b>Fecha:</b> {purchase.invoice_date || '-'}</span><span className="receipt-customer"><b>Proveedor / marca:</b> <span className="receipt-customer-name">{purchase.providers?.name || 'Sin especificar'}</span></span><span><b>Estado:</b> {statusLabel(purchase.payment_status)}</span>{purchase.cancelled_at && <span><b>Anulada el:</b> {dateTime(purchase.cancelled_at)}</span>}</div>{purchase.payment_status === 'cancelled' && <div className="alert warning">Factura anulada. El stock ingresado fue descontado y la cuenta corriente del proveedor fue corregida.{purchase.cancelled_reason ? ` Motivo: ${purchase.cancelled_reason}` : ''}</div>}<DataTable headers={['Producto', 'Cantidad', 'Costo', 'Subtotal base', 'Descuento', 'Total línea']} rows={(purchase.purchase_items || []).map((item) => [item.product_name, item.quantity, money(item.unit_cost), money(item.base_subtotal ?? item.subtotal), purchaseItemAdjustmentText(item, 'discount'), money(item.subtotal)])} /><div className="receipt-total">Subtotal sin ajustes: {money(subtotal)}</div>{discountAmount > 0 && <div className="receipt-total">Descuentos por producto: - {money(discountAmount)}</div>}<div className="receipt-total">Precio antes de bonificación e IVA: {money(afterDiscounts)}</div>{bonusAmount > 0 && <div className="receipt-total">{bonusLabel}: - {money(bonusAmount)}</div>}<div className="receipt-total">Precio luego de bonificación: {money(afterBonus)}</div>{vatAmount > 0 && <div className="receipt-total">IVA ({purchase.vat_percent || 0}%): + {money(vatAmount)}</div>}{historicalSurcharge > 0 && <div className="receipt-total">Recargo histórico aplicado: + {money(historicalSurcharge)}</div>}<div className="receipt-total">Precio final: {money(purchase.total)}</div><div className="receipt-payments"><span>Pagado: {money(purchase.paid_amount)}</span><span>Saldo pendiente: {money(purchase.outstanding_amount)}</span>{purchase.payment_methods?.name && <span>Pago inicial: {purchase.payment_methods.name}</span>}</div>{purchase.notes && <p><b>Notas:</b> {purchase.notes}</p>}</div><div className="modal-actions"><button className="secondary" onClick={onClose}>Cerrar</button><button className="primary" onClick={() => window.print()}><Printer size={17} />Imprimir</button></div></Modal>
 }
-function ReceiptModal({ receipt, onClose }) { return <Modal wide title={`Comprobante #${receipt.receipt_number}`} onClose={onClose}><div className="receipt sale-receipt"><div className="receipt-header"><h2>Comprobante interno</h2><p>No válido como factura fiscal</p></div><div className="receipt-meta"><span><b>Número:</b> #{receipt.receipt_number}</span><span><b>Fecha:</b> {dateTime(receipt.created_at)}</span><span className="receipt-customer"><b>Cliente:</b> <span className="receipt-customer-name">{receipt.customer_name || receipt.customers?.name || 'Consumidor final'}</span></span>{(receipt.customer_address || receipt.customers?.address) && <span className="receipt-address"><b>Domicilio:</b> <span>{receipt.customer_address || receipt.customers?.address}</span></span>}<span><b>Lista de precios:</b> {receipt.price_list_name || 'Precio de venta general'}</span><span><b>Estado:</b> {statusLabel(receipt.payment_status)}</span></div><DataTable className="sale-receipt-items" headers={['Producto', 'Cantidad', 'Precio', 'Subtotal base', 'Descuento', 'Total línea']} rows={(receipt.items || receipt.sale_items || []).map((item) => [<span className="sale-receipt-product-name">{item.product_name}</span>, item.quantity, money(item.unit_price), money(item.base_subtotal ?? item.subtotal), itemAdjustmentText(item, 'discount'), money(item.subtotal)])} /><div className="receipt-total">Subtotal sin ajustes: {money(receipt.subtotal ?? receipt.total)}</div>{Number(receipt.discount_amount || 0) > 0 && <div className="receipt-total">Descuentos aplicados: - {money(receipt.discount_amount)}</div>}{Number(receipt.surcharge_amount || 0) > 0 && <div className="receipt-total">Recargo histórico aplicado: + {money(receipt.surcharge_amount)}</div>}<div className="receipt-total">Total final: {money(receipt.total)}</div><div className="receipt-payments">{(receipt.payments || []).map((payment, index) => <span key={payment.id || index}>{payment.payment_method_name || payment.payment_methods?.name || 'Pago'}: {money(payment.amount)}</span>)}</div>{Number(receipt.outstanding_amount || 0) > 0 && <p><b>Saldo pendiente:</b> {money(receipt.outstanding_amount)}</p>}{receipt.notes && <p><b>Notas:</b> {receipt.notes}</p>}</div><div className="modal-actions"><button className="secondary" onClick={onClose}>Cerrar</button><button className="primary" onClick={() => window.print()}><Printer size={17} />Imprimir</button></div></Modal> }
+function ReceiptModal({ receipt, onClose }) {
+  const isCancelled = receipt.payment_status === 'cancelled'
+
+  return <Modal wide title={`Comprobante #${receipt.receipt_number}`} onClose={onClose}>
+    <div className="receipt sale-receipt">
+      <div className="receipt-header">
+        <h2>{isCancelled ? 'Comprobante anulado' : 'Comprobante interno'}</h2>
+        <p>No válido como factura fiscal</p>
+      </div>
+
+      <div className="receipt-meta">
+        <span><b>Número:</b> #{receipt.receipt_number}</span>
+        <span><b>Fecha:</b> {dateTime(receipt.created_at)}</span>
+        <span className="receipt-customer"><b>Cliente:</b> <span className="receipt-customer-name">{receipt.customer_name || receipt.customers?.name || 'Consumidor final'}</span></span>
+        {(receipt.customer_address || receipt.customers?.address) && <span className="receipt-address"><b>Domicilio:</b> <span>{receipt.customer_address || receipt.customers?.address}</span></span>}
+        <span><b>Lista de precios:</b> {receipt.price_list_name || 'Precio de venta general'}</span>
+        <span><b>Estado:</b> {statusLabel(receipt.payment_status)}</span>
+        {receipt.cancelled_at && <span><b>Anulada el:</b> {dateTime(receipt.cancelled_at)}</span>}
+      </div>
+
+      {isCancelled && (
+        <div className="alert warning">
+          Factura de venta anulada. El stock vendido fue repuesto y la cuenta corriente del cliente fue corregida.
+          {receipt.cancelled_reason ? ` Motivo: ${receipt.cancelled_reason}` : ''}
+        </div>
+      )}
+
+      <DataTable
+        className="sale-receipt-items"
+        headers={['Producto', 'Cantidad', 'Precio', 'Subtotal base', 'Descuento', 'Total línea']}
+        rows={(receipt.items || receipt.sale_items || []).map((item) => [
+          <span className="sale-receipt-product-name">{item.product_name}</span>,
+          item.quantity,
+          money(item.unit_price),
+          money(item.base_subtotal ?? item.subtotal),
+          itemAdjustmentText(item, 'discount'),
+          money(item.subtotal),
+        ])}
+      />
+
+      <div className="receipt-total">Subtotal sin ajustes: {money(receipt.subtotal ?? receipt.total)}</div>
+      {Number(receipt.discount_amount || 0) > 0 && <div className="receipt-total">Descuentos aplicados: - {money(receipt.discount_amount)}</div>}
+      {Number(receipt.surcharge_amount || 0) > 0 && <div className="receipt-total">Recargo histórico aplicado: + {money(receipt.surcharge_amount)}</div>}
+      <div className="receipt-total">Total final: {money(receipt.total)}</div>
+
+      <div className="receipt-payments">
+        {(receipt.payments || []).map((payment, index) => (
+          <span key={payment.id || index}>{payment.payment_method_name || payment.payment_methods?.name || 'Pago'}: {money(payment.amount)}</span>
+        ))}
+      </div>
+
+      {Number(receipt.outstanding_amount || 0) > 0 && <p><b>Saldo pendiente:</b> {money(receipt.outstanding_amount)}</p>}
+      {receipt.notes && <p><b>Notas:</b> {receipt.notes}</p>}
+    </div>
+
+    <div className="modal-actions">
+      <button className="secondary" onClick={onClose}>Cerrar</button>
+      <button className="primary" onClick={() => window.print()}><Printer size={17} />Imprimir</button>
+    </div>
+  </Modal>
+}
 
 function PriceListPreview({ list, products, brands, priceListItems, brandId, setBrandId, onClose }) {
   const rows = buildPriceListRows(list, products, priceListItems, brandId)
@@ -1546,7 +1639,7 @@ function Modal({ title, onClose, children, wide = false }) { return <div classNa
 function Status({ value }) { return <span className={value === 'paid' ? 'badge' : value === 'partial' ? 'badge warning' : value === 'cancelled' ? 'badge danger-badge' : 'badge danger-badge'}>{statusLabel(value)}</span> }
 function statusLabel(value) { return value === 'paid' ? 'Pagado' : value === 'partial' ? 'Pago parcial' : value === 'cancelled' ? 'Anulada' : 'Pendiente' }
 function movementLabel(value) { return value === 'sale_debt' ? 'Compra adeudada' : value === 'payment' ? 'Cobro recibido' : 'Ajuste manual' }
-function stockLabel(value) { return value === 'sale' ? 'Venta' : value === 'purchase' ? 'Ingreso por compra' : value === 'manual_adjustment' ? 'Ajuste manual' : 'Carga inicial' }
+function stockLabel(value) { return value === 'sale' ? 'Venta' : value === 'sale_void' ? 'Anulación de venta' : value === 'purchase' ? 'Ingreso por compra' : value === 'manual_adjustment' ? 'Ajuste manual' : 'Carga inicial' }
 function providerMovementLabel(value) { return value === 'purchase_debt' ? 'Factura adeudada' : value === 'payment' ? 'Pago realizado' : 'Ajuste manual' }
 function roundCurrency(value) { return Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100 }
 function adjustmentText(record) { const parts = []; if (Number(record.discount_amount || 0) > 0) parts.push(`-${money(record.discount_amount)}`); if (Number(record.surcharge_amount || 0) > 0) parts.push(`+${money(record.surcharge_amount)}`); return parts.length ? parts.join(' · ') : '-' }
